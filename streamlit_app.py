@@ -1,151 +1,129 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import plotly.express as px
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# 1. إعدادات الصفحة
+st.set_page_config(page_title="DSQUARES HUB", layout="wide")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# 2. روابط البيانات
+S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
+URL_F = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407"
+URL_S = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0"
+URL_Q = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747"
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+@st.cache_data(ttl=2)
+def load_and_sync():
+    try:
+        f = pd.read_csv(URL_F).dropna(how='all')
+        s = pd.read_csv(URL_S).dropna(subset=['Month'])
+        q = pd.read_csv(URL_Q).dropna(subset=['Agent Name'])
+        
+        for d in [f, s, q]:
+            d.columns = d.columns.str.strip()
+            for col in d.select_dtypes(['object']).columns:
+                d[col] = d[col].astype(str).str.strip()
+        
+        q = q[~q['Agent Name'].str.contains('Total', case=False, na=False)]
+        m_order = ['26-Jan', '26-Feb', '26-Mar', '26-Apr', '26-May', '26-Jun', '26-Jul', '26-Aug']
+        s['Month'] = pd.Categorical(s['Month'], categories=m_order, ordered=True)
+        return f, s, q
+    except:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+def to_n(series):
+    return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+df_f, df_s, df_q = load_and_sync()
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+if not df_f.empty:
+    # --- 🕹️ Sidebar (الـ 7 فلاتر كاملة) ---
+    st.sidebar.title("🎮 Global Control Center")
+    def get_opts(df, col):
+        return sorted([str(x) for x in df[col].unique() if pd.notna(x) and str(x).lower() not in ['nan','null','0']]) if col in df.columns else []
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    f_month = st.sidebar.multiselect("🗓️ Months", ['26-Jan', '26-Feb', '26-Mar', '26-Apr', '26-May', '26-Jun', '26-Jul', '26-Aug'], default=['26-Jan', '26-Feb', '26-Mar', '26-Apr', '26-May', '26-Jun', '26-Jul', '26-Aug'])
+    f_agent = st.sidebar.multiselect("👤 Agents", get_opts(df_f, 'Agent'))
+    f_proj = st.sidebar.multiselect("🏢 Projects", get_opts(df_f, 'Project'))
+    f_merc = st.sidebar.multiselect("🛍️ Merchants", get_opts(df_f, 'Merchant'))
+    f_type = st.sidebar.multiselect("🏷️ Ticket Type", get_opts(df_f, 'Ticket type'))
+    f_subtype = st.sidebar.multiselect("📂 Subtype", get_opts(df_f, 'Ticket subtype'))
+    f_branch = st.sidebar.multiselect("📍 Branch", get_opts(df_f, 'Branch User Name'))
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    ff = df_f.copy()
+    if f_agent: ff = ff[ff['Agent'].isin(f_agent)]
+    if f_proj: ff = ff[ff['Project'].isin(f_proj)]
+    if f_merc: ff = ff[ff['Merchant'].isin(f_merc)]
+    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
+    if f_subtype: ff = ff[ff['Ticket subtype'].isin(f_subtype)]
+    if f_branch: ff = ff[ff['Branch User Name'].isin(f_branch)]
+    
+    fs = df_s[df_s['Month'].isin(f_month)]
+    fq = df_q[df_q['Agent Name'].isin(f_agent)] if f_agent else df_q
 
-    return gdp_df
+    st.title("📊 DSQUARES INSIGHTS HUB")
+    t_ov, t_wa, t_sla, t_qual = st.tabs(["🏠 Overview", "💬 WhatsApp SLA", "📈 Inbound SLA", "🏆 Quality Ranking"])
 
-gdp_df = get_gdp_data()
+    # --- 1. OVERVIEW (7 Charts) ---
+    with t_ov:
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Total Tickets", f"{len(ff):,}")
+        k2.metric("Inbound Calls", f"{len(ff[ff['Type']=='Inbound']):,}")
+        k3.metric("WhatsApp Vol", f"{len(ff[ff['Type']=='WhatsApp']):,}")
+        k4.metric("Avg Quality", f"{to_n(fq['EC %']).mean():.1f}%")
+        
+        st.divider()
+        # Row 1: Merchants & Projects
+        c1, c2 = st.columns(2)
+        with c1: st.plotly_chart(px.bar(ff['Merchant'].value_counts().head(10), title="Top 10 Merchants", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        with c2: st.plotly_chart(px.bar(ff['Project'].value_counts().head(10), title="Top 10 Projects", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        
+        # Row 2: Ticket Type & Subtype
+        c3, c4 = st.columns(2)
+        with c3: st.plotly_chart(px.bar(ff['Ticket type'].value_counts(), title="Ticket Types Distribution", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        with c4: st.plotly_chart(px.bar(ff['Ticket subtype'].value_counts().head(10), title="Top 10 Ticket Subtypes", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        
+        # Row 3: Branches & Microtypes
+        c5, c6 = st.columns(2)
+        with c5: st.plotly_chart(px.bar(ff['Branch User Name'].value_counts().head(10), title="Top 10 Branches", orientation='h', template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        with c6: st.plotly_chart(px.bar(ff[ff['Call Microtype']!='N/A']['Call Microtype'].value_counts().head(10), title="Top 10 Call Microtypes", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        
+        # Row 4: Action Taken (Full Width)
+        st.plotly_chart(px.bar(ff['Action taken'].value_counts().head(10), title="Action Taken Breakdown", template="plotly_dark"), config={'displayModeBar': True}, use_container_width=True)
+        
+        st.subheader("🎫 Ticket Explorer (Raw Data)")
+        st.dataframe(ff[['Ticket ID', 'Type', 'Agent', 'Merchant', 'Project', 'Ticket type', 'Ticket subtype', 'Call Microtype', 'Action taken', 'Created time']], use_container_width=True)
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    # --- بقية التبويبات (SLA & Quality) كما هي مضبوطة سابقاً ---
+    with t_wa:
+        st.subheader("💬 WhatsApp Monthly SLA Status")
+        wa_col = 'WhatsApp SLA Status'
+        if wa_col in ff.columns:
+            wa_data = ff[ff['Type'] == 'WhatsApp'].copy()
+            wa_data['M'] = wa_data['Created time'].str.extract(r'-(0[1-8])-').replace({'01':'26-Jan','02':'26-Feb','03':'26-Mar','04':'26-Apr','05':'26-May','06':'26-Jun','07':'26-Jul','08':'26-Aug'})
+            monthly_sla = wa_data.groupby(['M', wa_col]).size().unstack(fill_value=0)
+            available_cols = [c for c in ['On-Time', 'Late'] if c in monthly_sla.columns]
+            st.table(monthly_sla[available_cols].reset_index().rename(columns={'M':'Month'}))
+            st.plotly_chart(px.pie(wa_data, names=wa_col, hole=0.4, title="Overall Achievement", color_discrete_map={'On-Time':'#00CC96', 'Late':'#EF553B'}), config={'displayModeBar': True}, use_container_width=True)
+        else: st.warning("SLA Column Not Found.")
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+    with t_sla:
+        st.plotly_chart(px.bar(fs, x='Month', y=['Offered', 'Answered'], barmode='group', title="Inbound Performance"), config={'displayModeBar': True}, use_container_width=True)
+        fs['PCA_Val'] = to_n(fs['PCA %'])
+        st.plotly_chart(px.line(fs, x='Month', y='PCA_Val', title="PCA % Trend", markers=True), config={'displayModeBar': True}, use_container_width=True)
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+    with t_qual:
+        st.subheader("🏆 Quality Detailed Ledger")
+        fq_final = fq.copy()
+        pct_cols = ['EC %', 'BC %', 'NC %', 'EC %.1', 'BC %.1', 'NC %.1']
+        fq_display = fq_final.copy()
+        for c in pct_cols:
+            if c in fq_final.columns:
+                val = to_n(fq_final[c])
+                fq_display[c] = val.apply(lambda x: f"{x:.1f}%")
+        total_row = pd.DataFrame([{ 'Agent Name': 'TOTAL SUMMARY', 'Login ID': '-', 'Total Calls': to_n(fq_final['Total Calls']).sum(), 'EC %': f"{to_n(fq_final['EC %']).mean():.1f}%", 'BC %': f"{to_n(fq_final['BC %']).mean():.1f}%", 'Total WhatsApp': to_n(fq_final['Total WhatsApp']).sum(), 'EC %.1': f"{to_n(fq_final['EC %.1']).mean():.1f}%", 'BC %.1': f"{to_n(fq_final['BC %.1']).mean():.1f}%" }])
+        final_table = pd.concat([fq_display, total_row], ignore_index=True)
+        disp = {'Agent Name': 'Agent', 'Total Calls': 'C-Vol', 'EC %': 'C-EC%', 'BC %': 'C-BC%', 'NC %': 'C-NC%', 'Total WhatsApp': 'W-Vol', 'EC %.1': 'W-EC%', 'BC %.1': 'W-BC%', 'NC %.1': 'W-NC%'}
+        st.dataframe(final_table.rename(columns=disp), use_container_width=True)
+        st.plotly_chart(px.bar(fq_final, x='Agent Name', y='EC %', title="Accuracy per Agent"), config={'displayModeBar': True}, use_container_width=True)
 
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+else: st.error("No Data.")

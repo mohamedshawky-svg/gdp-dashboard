@@ -1,19 +1,21 @@
-# :earth_americas: GDP dashboard template
+import streamlit as st
+import pandas as pd
+import plotly.express as px
 
-A simple Streamlit app showing the GDP of different countries in the world.
+st.set_page_config(page_title="Dsquares Hub", layout="wide")
+st.markdown("<style>.stApp{background-color:#0e1117;color:white;} div[data-testid='stMetricValue']{color:#00d2ff;text-shadow:0 0 10px #00d2ff;}</style>", unsafe_allow_label_html=True)
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
+st.title("📊 DSQUARES INSIGHTS HUB")
 
-### How to run it on your own machine
+url = "https://docs.google.com/spreadsheets/d/18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc/export?format=csv"
 
-1. Install the requirements
-
-   ```
-   $ pip install -r requirements.txt
-   ```
-
-2. Run the app
-
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+try:
+    df = pd.read_csv(url)
+    c1, c2 = st.columns(2)
+    c1.metric("TOTAL TICKETS", len(df))
+    if 'Type' in df.columns:
+        st.plotly_chart(px.pie(df, names='Type', template="plotly_dark", hole=0.4), use_container_width=True)
+    st.subheader("Live Stream")
+    st.dataframe(df.tail(10), use_container_width=True)
+except Exception as e:
+    st.error(f"Waiting for Data... Error: {e}")
