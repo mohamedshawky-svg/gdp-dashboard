@@ -31,11 +31,7 @@ st.markdown(f"""
     .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 30px; gap: 12px; }}
     [data-testid="stMetricValue"] {{ font-size: 30px; color: {DS_BLUE} !important; font-weight: bold; }}
     .stMetric, .wa-card {{ background-color: white !important; padding: 20px !important; border-radius: 12px !important; border-top: 6px solid {DS_BLUE} !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; text-align: center; }}
-    
-    /* تثبيت اللون الكحلي في الجداول */
-    [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame div {{
-        color: {DS_BLUE} !important;
-    }}
+    [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame div {{ color: {DS_BLUE} !important; }}
     label, p, li {{ color: {DS_BLUE} !important; }}
     [data-testid="stElementToolbar"] {{ display: none; }}
     </style>
@@ -46,17 +42,10 @@ S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 @st.cache_data(ttl=2)
 def load_all_data():
     try:
-        f_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407"
-        s_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0"
-        q_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747"
-        
-        f = pd.read_csv(f_url, dtype=str).fillna("N/A")
-        s = pd.read_csv(s_url, dtype=str).fillna("0")
-        q = pd.read_csv(q_url, dtype=str).fillna("0")
-        
-        # تنظيف الفراغات حول الكلمات في كل الداتا (عشان الفلتر يشتغل صح)
+        f = pd.read_csv(f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407", dtype=str).fillna("N/A")
+        s = pd.read_csv(f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0", dtype=str).fillna("0")
+        q = pd.read_csv(f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747", dtype=str).fillna("0")
         f = f.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-        
         d_col = next((c for c in f.columns if 'created' in c.lower() or 'date' in c.lower()), f.columns[0])
         f['Full_Date_Obj'] = pd.to_datetime(f[d_col], errors='coerce').dt.date
         f = f.dropna(subset=['Full_Date_Obj'])
@@ -71,7 +60,7 @@ def to_n(series):
 
 df_f, df_s, df_q = load_all_data()
 
-# ✅ قائمة الاستبعاد "النهائية" (نسف الكلمات اللي بتضايقك)
+# ✅ قائمة الاستبعاد (EXCLUDE)
 EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out Of our scope', 'Out of our scope', 'Other', 'other', 'na', 'n.a', '0', ' ', '', 'n', 'N']
 
 # --- شاشة الدخول ---
@@ -88,13 +77,12 @@ if df_f is not None:
     if icon_inner_64:
         st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
 
-    # الفلاتر
+    # Sidebar Filters
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
     ff = df_f[(df_f['Full_Date_Obj'] >= dr[0]) & (df_f['Full_Date_Obj'] <= dr[1])] if len(dr)==2 else df_f
     
-    # استكمال الفلاتر الـ 5
     br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
     f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
@@ -121,15 +109,19 @@ if df_f is not None:
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         st.plotly_chart(px.bar(daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj'), x='Full_Date_Obj', y='Total', text_auto=True, title="🗓 Volume Trend", color_discrete_sequence=[DS_BLUE]), use_container_width=True)
 
+        st.divider()
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Project'].isin(EXCLUDE)]['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].isin(EXCLUDE)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Action taken'].isin(EXCLUDE)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         with c2:
             st.plotly_chart(px.bar(ff[~ff[br_col].isin(EXCLUDE)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]: # ✅ WhatsApp MoM (إعادة الكروت)
+    with tabs[1]: # WhatsApp MoM
         st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
         m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
@@ -143,21 +135,26 @@ if df_f is not None:
                 with cols[i % 4]:
                     st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ {ot} | ❌ {lt}</p></div>', unsafe_allow_html=True)
 
-    with tabs[2]: # ✅ Inbound SLA (إصلاح الجدول والـ Chart)
+    with tabs[2]: # Inbound SLA
         st.subheader("📈 Inbound SLA Summary")
         st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         st.dataframe(df_s.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
-    with tabs[3]: # ✅ Quality Board (حذف الـ 2 columns الزيادة)
+    with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
         clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0') & (~df_q['Agent Name'].isin(EXCLUDE)) & (to_n(df_q['Total Calls']) > 0)].copy()
-        # نأخذ فقط الأعمدة الأساسية عشان نشيل الـ 2 كولومز الزيادة (EC% و BC%) اللي كانوا بيظهروا في الآخر
-        cols_to_show = [c for c in clean_q.columns if not (c == 'EC%' or c == 'BC%')]
-        final_q = clean_q[cols_to_show].copy()
         
-        fig_q = px.bar(clean_q, x='Agent Name', y=[to_n(clean_q['EC %']), to_n(clean_q['BC %'])], barmode='group', title="Agent Comparison", color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
+        # ✅ إصلاح الـ Legend وتسمية الأعمدة قبل الرسم
+        plot_df = clean_q.rename(columns={'EC %': 'EC%', 'BC %': 'BC%'})
+        plot_df['EC%'] = to_n(plot_df['EC%'])
+        plot_df['BC%'] = to_n(plot_df['BC%'])
+        
+        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
+        fig_q.update_layout(legend_title_text='Results', yaxis_title="Percentage %")
         st.plotly_chart(fig_q, use_container_width=True)
-        st.dataframe(final_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
+        
+        # عرض الجدول الأصلي
+        st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[4]: # Ticket Explorer
         st.subheader("🎫 Ticket Explorer")
