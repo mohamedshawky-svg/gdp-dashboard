@@ -11,17 +11,19 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-# دالة لقراءة الصور بأمان من GitHub
+# دالة لقراءة الصور بأمان وتوافق مع Streamlit Cloud
 def get_image_base64(path):
     try:
-        if os.path.exists(path):
-            with open(path, "rb") as image_file:
+        # التأكد من البحث في المجلد الحالي للمستودع
+        actual_path = os.path.join(os.getcwd(), path)
+        if os.path.exists(actual_path):
+            with open(actual_path, "rb") as image_file:
                 return base64.b64encode(image_file.read()).decode()
         return None
     except:
         return None
 
-# أسامي اللوجوهات الجديدة (تأكد إنها مرفوعة بنفس الاسم على GitHub)
+# الأسماء الجديدة اللي إنت عدلتها في GitHub
 OUTER_LOGO = "logo_icon.png"  
 INNER_LOGO = "Small_Logo.png" 
 
@@ -195,7 +197,6 @@ if df_f is not None:
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
         
-        # تسمية الـ Legend بشكل احترافي EC% و BC%
         fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
