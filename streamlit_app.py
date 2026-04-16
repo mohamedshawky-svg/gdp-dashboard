@@ -5,7 +5,7 @@ from datetime import date
 import base64
 import os
 
-# 1. إعداد الصفحة والـ Theme (تنسيق السطور الأصلي)
+# 1. إعداد الصفحة والـ Theme (كامل بالتنسيق الأصلي)
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 
 DS_BLUE = "#0055A4"
@@ -20,19 +20,17 @@ def get_image_base64(path):
     except:
         return None
 
-# أسامي اللوجوهات المعتمدة (تأكد من وجودها في GitHub بنفس الاسم)
-FULL_LOGO = "logo_icon.png"  
-ICON_INNER = "Small_Logo.png" 
+# ✅ الأسماء الجديدة اللي إنت لسه مصلحها في Codespace
+FULL_LOGO = "logo_big.png"    
+ICON_INNER = "logo_small.png" 
 
 full_logo_64 = get_image_base64(FULL_LOGO)
 icon_inner_64 = get_image_base64(ICON_INNER)
 
-# CSS المطور (نفس كودك وتنسيقك)
+# CSS المطور (تنسيق الجداول والخطوط والفلاتر)
 st.markdown(f"""
     <style>
-    span[data-baseweb="tag"] {{
-        background-color: {DS_BLUE} !important;
-    }}
+    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
     .main-title {{ 
         color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
         text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
@@ -45,8 +43,7 @@ st.markdown(f"""
     .stMetric, .wa-card {{
         background-color: white !important; padding: 20px !important; border-radius: 12px !important;
         border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; text-align: center;
     }}
     .stDataFrame, div[data-testid="stTable"] {{
         background-color: white !important; color: {DS_BLUE} !important; border-radius: 10px;
@@ -81,7 +78,6 @@ def to_n(series):
 
 df_f, df_s, df_q = load_all_data()
 
-# ✅ التطهير النهائي (كل اللي قولت نشيله)
 EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
 
 # --- 🔐 شاشة الدخول ---
@@ -94,26 +90,17 @@ if not password or (password not in ["admin123", "ds2024"]):
     with c2:
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # اللوجو والعنوان الداخلي
     if icon_inner_64:
-        st.markdown(f"""
-            <div class="header-container">
-                <img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/>
-                <span class="main-title">DSQUARES INSIGHTS HUB</span>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>""", unsafe_allow_html=True)
     else:
         st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
 
-    # Sidebar Filters
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
@@ -137,27 +124,19 @@ if df_f is not None:
     with tabs[0]:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
-        
-        # ✅ قراءة الـ Total Inbound من عمود P
-        inb_val = 0
-        if 'Total Inbound' in ff.columns:
-            inb_val = int(to_n(ff['Total Inbound']).max())
+        inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
         k2.metric("Total Inbound", f"{inb_val:,}")
-        
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        st.subheader("🗓 Volume Trend per Microtype")
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
-        
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
         fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
-        # ✅ رسم الـ 7 Charts كاملة مع الـ EXCLUDE
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
@@ -169,7 +148,7 @@ if df_f is not None:
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]: # WhatsApp
+    with tabs[1]:
         st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
         m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
@@ -177,17 +156,30 @@ if df_f is not None:
             cols = st.columns(4)
             for i, m in enumerate(m_list):
                 m_data = ff[ff['Month_Name'] == m]
-                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)]), len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
+                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', na=False)]), len(m_data[m_data[wa_col].str.contains('Late', na=False)])
                 perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
                 with cols[i % 4]:
-                    st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ {ot} | ❌ {lt}</p></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ On-Time: {ot} | ❌ Late: {lt}</p></div>', unsafe_allow_html=True)
     
-    with tabs[3]: # Quality Board
+    with tabs[2]:
+        st.subheader("📈 Inbound SLA Summary")
+        st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        st.dataframe(df_s, use_container_width=True, hide_index=True)
+
+    with tabs[3]:
         st.subheader("🏆 Quality Board")
-        clean_q = df_q[df_q['Agent Name'] != 'Total'].copy()
-        plot_df = clean_q.copy()
-        plot_df['EC%'] = to_n(plot_df['EC %'])
-        plot_df['BC%'] = to_n(plot_df['BC %'])
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0')].copy()
+        clean_q['EC%'] = to_n(clean_q['EC %'])
+        clean_q['BC%'] = to_n(clean_q['BC %'])
+        fig_q = px.bar(clean_q, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
+        st.dataframe(df_q, use_container_width=True, hide_index=True)
+
+    with tabs[4]:
+        st.subheader("🎫 Ticket Explorer")
+        search = st.text_input("🔍 Search Anything...", "")
+        exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
+        st.dataframe(exp_df, use_container_width=True, hide_index=True)
+else:
+    st.error("Data connection failed!")
