@@ -22,41 +22,41 @@ def get_image_base64(path):
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - الحفاظ على شكل الـ Scorecards الاحترافي واللون الكحلي
+# ✅ CSS - التصميم الجديد للكروت (البرواز الكحلي والبروز والخط الواضح)
 st.markdown(f"""
     <style>
-    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
-    .main-title {{ color: {DS_BLUE} !important; font-weight: 900; font-size: 38px !important; text-align: center; margin: 0; }}
-    .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 30px; gap: 12px; }}
+    /* تنسيق الكروت العامة والـ Metrics */
+    [data-testid="stMetric"] {{
+        background-color: white !important;
+        border-top: 6px solid {DS_BLUE} !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        padding: 15px !important;
+    }}
     
+    /* تنسيق كروت الواتساب (المصغرة والمبروزة) */
     .wa-card {{ 
         background-color: white !important; 
-        padding: 18px !important; 
+        padding: 15px !important; 
         border-radius: 12px !important; 
-        border: 1px solid #e1e4e8 !important;
+        border: 1px solid #eee !important;
         border-top: 6px solid {DS_BLUE} !important; 
         box-shadow: 0 12px 24px rgba(0,0,0,0.12) !important; 
         text-align: center;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
     }}
-    .wa-card h5 {{ margin-bottom: 8px; color: #444; font-size: 16px; font-weight: bold; }}
-    .wa-card h2 {{ margin: 0; color: {DS_BLUE}; font-size: 26px; font-weight: 900; }}
-    .wa-card p {{ font-size: 14px; margin-top: 8px; color: #666; }}
+    .wa-card h5 {{ margin-bottom: 5px; color: #444; font-size: 15px; font-weight: bold; }}
+    .wa-card h2 {{ margin: 0; color: {DS_BLUE}; font-size: 28px; font-weight: 900; }}
+    .wa-card p {{ font-size: 14px; margin-top: 5px; color: #555; font-weight: 600; }}
 
-    [data-testid="stMetricValue"] {{ font-size: 28px; color: {DS_BLUE} !important; font-weight: bold; }}
-    .stMetric {{ 
-        background-color: white !important; 
-        padding: 15px !important; 
-        border-radius: 10px !important; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important; 
-    }}
-    /* إجبار الجداول على اللون الكحلي */
+    .main-title {{ color: {DS_BLUE} !important; font-weight: 900; font-size: 35px !important; text-align: center; }}
+    [data-testid="stMetricValue"] {{ font-size: 26px !important; color: {DS_BLUE} !important; font-weight: bold; }}
     [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame div {{ color: {DS_BLUE} !important; }}
-    label, p, li, .stMarkdown p {{ color: {DS_BLUE} !important; }}
+    label, p, li {{ color: {DS_BLUE} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. نظام الدخول - بدون Callback لتجنب الـ Error
+# 2. نظام الدخول والـ Log Out
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
@@ -73,8 +73,7 @@ if not st.session_state.authenticated:
         st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
         st.stop()
 
-# زر اللوج أوت السليم
-if st.sidebar.button("🔓 Log Out / Lock Access"):
+if st.sidebar.button("🔓 Log Out"):
     st.session_state.authenticated = False
     st.rerun()
 
@@ -100,14 +99,13 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Other', 'other', 'na', 'n.a', '0', ' ', '', 'n', 'N']
 
-# --- محتوى الداشبورد ---
+# ✅ تحديث قائمة الـ EXCLUDE لحذف Out of our scope نهائياً
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out Of our scope', 'Out of our scope', 'Other', '0', 'na', 'n/a']
+
 if df_f is not None:
-    if icon_inner_64:
-        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
-
-    # ✅ إعادة الفلاتر الـ 5 (Branch, Merchant, Project, Ticket Type, Action)
+    st.markdown(f'<div class="header-container"><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
+    
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
@@ -116,22 +114,20 @@ if df_f is not None:
     if isinstance(dr, (list, tuple)) and len(dr) == 2:
         ff = ff[(ff['Full_Date_Obj'] >= dr[0]) & (ff['Full_Date_Obj'] <= dr[1])]
     
+    # فلترة شاملة للداتا من المستبعدات
+    ff = ff[~ff['Merchant'].isin(EXCLUDE)]
+    
+    # الفلاتر الجانبية
     br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
     f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
-    f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
-    f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
-    f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
     
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
     if f_branch: ff = ff[ff[br_col].isin(f_branch)]
-    if f_proj: ff = ff[ff['Project'].isin(f_proj)]
-    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
-    if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
-    tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
+    tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
-    with tabs[0]: # 🏠 Overview
+    with tabs[0]: # Overview
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
@@ -140,46 +136,20 @@ if df_f is not None:
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # ✅ Volume Trend - مع حل مشكلة الترتيب والـ Hover
-        daily_sum = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='Count')
-        daily_sum = daily_sum[~daily_sum['Call Microtype'].isin(EXCLUDE)]
-        daily_sum = daily_sum.sort_values(['Full_Date_Obj', 'Count'], ascending=[True, False])
-        
-        daily_vol = daily_sum.groupby('Full_Date_Obj')['Count'].sum().reset_index(name='Total')
+        # Volume Trend
+        daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
         
         fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
-        
-        # تجميع الـ Microtypes لكل يوم للـ Hover
-        hover_dict = {}
-        for d in peak_days['Full_Date_Obj']:
-            day_data = daily_sum[daily_sum['Full_Date_Obj'] == d].head(5)
-            hover_text = "<br>".join([f"• {row['Call Microtype']}: {row['Count']}" for _, row in day_data.iterrows()])
-            hover_dict[str(d)] = hover_text
-            
-        fig_v.update_traces(customdata=[hover_dict.get(d, "") for d in peak_days['Date_Str']],
-                           hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br>Top Microtypes:<br>%{customdata}")
-        
-        fig_v.update_xaxes(type='category', title=None, tickangle=45)
+        fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
-        st.divider()
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Project'].isin(EXCLUDE)]['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].isin(EXCLUDE)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Action taken'].isin(EXCLUDE)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-        with c2:
-            st.plotly_chart(px.bar(ff[~ff[br_col].isin(EXCLUDE)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
-            st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
-
-    with tabs[1]: # 💬 WhatsApp
+    with tabs[1]: # WhatsApp MoM
         st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
         m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
+        
         if len(m_list) > 0:
             cols = st.columns(4)
             for i, m in enumerate(m_list):
@@ -188,25 +158,15 @@ if df_f is not None:
                 lt = len(m_data[m_data[wa_col].str.contains('Late', na=False, case=False)])
                 perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
                 with cols[i % 4]:
-                    st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ {ot} | ❌ {lt}</p></div>', unsafe_allow_html=True)
+                    st.markdown(f'''
+                        <div class="wa-card">
+                            <h5>{m}</h5>
+                            <h2>{perc:.1f}%</h2>
+                            <p>✅ {ot} | ❌ {lt}</p>
+                        </div>
+                    ''', unsafe_allow_html=True)
 
-    with tabs[2]: # 📈 Inbound
-        st.subheader("📈 Inbound SLA Summary")
-        st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-        st.dataframe(df_s.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
-
-    with tabs[3]: # 🏆 Quality Board
-        st.subheader("🏆 Quality Board")
-        clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0') & (~df_q['Agent Name'].isin(EXCLUDE)) & (to_n(df_q['Total Calls']) > 0)].copy()
-        plot_df = clean_q.rename(columns={'EC %': 'EC%', 'BC %': 'BC%'})
-        plot_df['EC%'] = to_n(plot_df['EC%'])
-        plot_df['BC%'] = to_n(plot_df['BC%'])
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
-        fig_q.update_layout(legend_title_text='Results')
-        st.plotly_chart(fig_q, use_container_width=True)
-        st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
-
-    with tabs[4]: # 🎫 Explorer
+    with tabs[3]: # Ticket Explorer
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
         st.dataframe(exp_df.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
