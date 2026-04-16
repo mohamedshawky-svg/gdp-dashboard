@@ -22,7 +22,7 @@ def get_image_base64(path):
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - التنسيق النهائي (اللون الكحلي للـ Tags والبروز)
+# ✅ CSS - التنسيق النهائي الاحترافي
 st.markdown(f"""
     <style>
     span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; border-radius: 4px !important; }}
@@ -38,10 +38,12 @@ st.markdown(f"""
         border: 1px solid #f0f2f6 !important; border-top: 6px solid {DS_BLUE} !important; 
         box-shadow: 0 12px 24px rgba(0,0,0,0.12) !important; text-align: center; margin-bottom: 25px;
     }}
+    .wa-card h5 {{ margin-bottom: 5px; color: #444; font-size: 16px; font-weight: bold; }}
+    .wa-card h2 {{ margin: 0; color: {DS_BLUE}; font-size: 28px; font-weight: 900; }}
+    .wa-card p {{ font-size: 14px; margin-top: 5px; color: #555; font-weight: 700; }}
     .main-title {{ color: {DS_BLUE} !important; font-weight: 900; font-size: 38px !important; text-align: center; margin-bottom: 5px; }}
     .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 20px; gap: 15px; }}
     
-    /* 💡 تنسيق جديد لجملة الـ Hover تحت الـ Scorecards */
     .hover-banner {{
         background-color: #f8f9fa;
         border-left: 5px solid {DS_BLUE};
@@ -147,10 +149,9 @@ if df_f is not None:
         k3.metric("Total WhatsApp", f"{wa_val:,}")
         k4.metric("Avg Quality", "96.6%")
         
-        # ✅ الجملة في مكانها الجديد تحت الـ Scorecards ومميزة بـ Banner
+        # ✅ الجملة تحت الـ Scorecards
         st.markdown('<div class="hover-banner">💡 Please hover on all charts to explore deeper insights and data breakdowns</div>', unsafe_allow_html=True)
 
-        # Volume Trend
         daily_total = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
@@ -173,19 +174,26 @@ if df_f is not None:
         with c1:
             st.plotly_chart(px.bar(clean_c(ff, 'Merchant')['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
             st.plotly_chart(px.bar(clean_c(ff, 'Project')['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            
+            # الربط: Subtype ⬅️ Ticket Type
             st_data = clean_c(ff, 'Ticket subtype')
             st_counts = st_data.groupby(['Ticket subtype', 'Ticket type']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
             fig_st = px.bar(st_counts, x='Ticket subtype', y='count', title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE], hover_data={'Ticket type': True, 'count': True, 'Ticket subtype': False})
             fig_st.update_traces(hovertemplate="<b>Sub-type:</b> %{x}<br><b>Type:</b> %{customdata[0]}<br><b>Count:</b> %{y}")
             st.plotly_chart(fig_st, use_container_width=True)
+            
             st.plotly_chart(px.bar(clean_c(ff, 'Action taken')['Action taken'].value_counts().head(10), title="7. Action Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         with c2:
+            # الربط: الفرع ⬅️ الميرشنت
             br_data = clean_c(ff, br_col)
             br_counts = br_data.groupby([br_col, 'Merchant']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
             fig_br = px.bar(br_counts, x=br_col, y='count', title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE], hover_data={'Merchant': True, 'count': True, br_col: False})
             fig_br.update_traces(hovertemplate="<b>Branch:</b> %{x}<br><b>Merchant:</b> %{customdata[0]}<br><b>Count:</b> %{y}")
             st.plotly_chart(fig_br, use_container_width=True)
+            
             st.plotly_chart(px.pie(clean_c(ff, 'Ticket type'), names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
+            
+            # الربط: Microtype ⬅️ Subtype
             mi_data = clean_c(ff, 'Call Microtype')
             mi_counts = mi_data.groupby(['Call Microtype', 'Ticket subtype']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
             fig_mi = px.bar(mi_counts, x='Call Microtype', y='count', title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE], hover_data={'Ticket subtype': True, 'count': True, 'Call Microtype': False})
@@ -214,9 +222,22 @@ if df_f is not None:
 
     with tabs[3]: # 🏆 Quality Board
         st.subheader("🏆 Quality Board")
-        clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0') & (~df_q['Agent Name'].str.lower().isin(EXCLUDE_LOWER)) & (to_n(df_q['Total Calls']) > 0)].copy()
+        clean_q = df_q[(df_q['Agent Name'] != 'Total') & 
+                       (df_q['Agent Name'] != '0') & 
+                       (~df_q['Agent Name'].str.lower().isin(EXCLUDE_LOWER)) & 
+                       (to_n(df_q['Total Calls']) > 0)].copy()
+        
+        # ✅ تعديل الـ Legend ليظهر EC% و BC% بدلاً من wide_variable
         q_plot = clean_q.rename(columns={'EC %': 'EC%', 'BC %': 'BC%'})
-        fig_q = px.bar(q_plot, x='Agent Name', y=[to_n(q_plot['EC%']), to_n(q_plot['BC%'])], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
+        q_plot['EC%'] = to_n(q_plot['EC%'])
+        q_plot['BC%'] = to_n(q_plot['BC%'])
+        
+        fig_q = px.bar(q_plot, x='Agent Name', y=['EC%', 'BC%'], barmode='group', 
+                       title="Agent Comparison", text_auto='.1f', 
+                       color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE],
+                       labels={"value": "Score (%)", "variable": "Metric"})
+        
+        fig_q.update_layout(legend_title_text='Metric Type')
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
