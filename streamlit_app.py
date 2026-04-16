@@ -17,8 +17,7 @@ def get_image_base64(path):
             with open(path, "rb") as image_file:
                 return base64.b64encode(image_file.read()).decode()
         return None
-    except:
-        return None
+    except: return None
 
 # ✅ اللوجوهات بأسماء GitHub اللي إنت صلحتا
 FULL_LOGO = "logo_big.png"    
@@ -27,12 +26,10 @@ ICON_INNER = "logo_small.png"
 full_logo_64 = get_image_base64(FULL_LOGO)
 icon_inner_64 = get_image_base64(ICON_INNER)
 
-# CSS المطور (🔵 إجبار اللون الكحلي Navy في كل مكان)
+# CSS المطور (🔵 إجبار اللون الكحلي Navy في كل مكان - جداول ونصوص)
 st.markdown(f"""
     <style>
-    span[data-baseweb="tag"] {{
-        background-color: {DS_BLUE} !important;
-    }}
+    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
     .main-title {{ 
         color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
         text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
@@ -44,16 +41,15 @@ st.markdown(f"""
     [data-testid="stMetricValue"] {{ font-size: 30px; color: {DS_BLUE} !important; font-weight: bold; }}
     .stMetric, .wa-card {{
         background-color: white !important; padding: 20px !important; border-radius: 12px !important;
-        border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
+        border-top: 6px solid {DS_BLUE} !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
         text-align: center;
     }}
-    /* 🔵 تثبيت اللون الكحلي Navy للجداول والنصوص */
+    /* 🔵 تعديل لون الخط الكحلي Navy في كل حتة (جداول، نصوص، عناوين) */
     .stDataFrame, div[data-testid="stTable"], .stMarkdown, p, li, label, .stMetric label {{
         color: {DS_BLUE} !important;
     }}
     /* إجبار خلايا الجدول والهيدر على اللون الكحلي */
-    [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame [data-testid="stTable"] {{
+    [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame [data-testid="stTable"] td {{
         color: {DS_BLUE} !important;
     }}
     [data-testid="stElementToolbar"] {{ display: none; }}
@@ -69,7 +65,6 @@ def load_all_data():
         s = pd.read_csv(f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0", dtype=str).fillna("0")
         q = pd.read_csv(f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747", dtype=str).fillna("0")
         
-        # تحديد عمود التاريخ تلقائياً
         d_col = next((c for c in f.columns if 'created' in c.lower() or 'date' in c.lower()), f.columns[0])
         f['Full_Date_Obj'] = pd.to_datetime(f[d_col], errors='coerce').dt.date
         f = f.dropna(subset=['Full_Date_Obj'])
@@ -78,16 +73,15 @@ def load_all_data():
         f['Month_Name'] = pd.to_datetime(f[d_col], errors='coerce').dt.strftime('%b')
         f['Month_Num'] = f['Month_Name'].map(m_map)
         return f, s, q
-    except:
-        return None, None, None
+    except: return None, None, None
 
 def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
 
-# ✅ القائمة المحظورة (تنظيف شامل لكل التابات والرسومات)
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out Of Scope', 'Other', 'other', 'na', 'n.a', '0', ' ', '']
+# ✅ القائمة المحظورة (تطهير شامل عشان الكلمات دي متظهرش تاني أبداً)
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Other', 'other', 'na', 'n.a', '0', ' ', '']
 
 # --- 🔐 شاشة الدخول ---
 st.sidebar.title("🔐 Access Control")
@@ -97,23 +91,16 @@ if not password or (password not in ["admin123", "ds2024"]):
     st.write("")
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
-        if full_logo_64:
-            st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" width="400"/></div>', unsafe_allow_html=True)
+        if full_logo_64: st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" width="400"/></div>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # الهيدر الداخلي
     if icon_inner_64:
-        st.markdown(f"""
-            <div class="header-container">
-                <img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/>
-                <span class="main-title">DSQUARES INSIGHTS HUB</span>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
 
-    # ✅ استعادة كافة الفلاتر (5 فلاتر كاملة)
+    # Sidebar Filters (استعادة الفلاتر الـ 5 كاملة)
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
@@ -137,7 +124,6 @@ if df_f is not None:
     with tabs[0]: # 1. Overview
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
-        # قراءة عمود P
         inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
         k2.metric("Total Inbound", f"{inb_val:,}")
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
@@ -145,10 +131,9 @@ if df_f is not None:
         
         st.divider()
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
-        st.plotly_chart(px.bar(daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj'), x='Full_Date_Obj', y='Total', text_auto=True, title="🗓 Volume Trend", color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        st.plotly_chart(px.bar(daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj'), x='Full_Date_Obj', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE]), use_container_width=True)
 
         st.divider()
-        # ✅ رسم الـ 7 رسومات كاملة
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
@@ -180,7 +165,7 @@ if df_f is not None:
 
     with tabs[3]: # 4. Quality
         st.subheader("🏆 Quality Board")
-        # تنظيف عميق لجدول الجودة
+        # ✅ تنظيف الجدول من كل الكلمات المحظورة والأصفار
         clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0') & (~df_q['Agent Name'].isin(EXCLUDE)) & (to_n(df_q['Total Calls']) > 0)].copy()
         clean_q['EC%'] = to_n(clean_q['EC %'])
         clean_q['BC%'] = to_n(clean_q['BC %'])
@@ -191,4 +176,5 @@ if df_f is not None:
         st.subheader("🎫 Ticket Explorer")
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
+        # ✅ عرض الجدول باللون الكحلي المعتمد
         st.dataframe(exp_df, use_container_width=True, hide_index=True)
