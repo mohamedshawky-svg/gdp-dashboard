@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 import base64
+import os
 
 # 1. إعداد الصفحة والـ Theme
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
@@ -10,18 +11,22 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
+# دالة لقراءة الصور بأمان من GitHub
 def get_image_base64(path):
     try:
-        with open(path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode()
+        if os.path.exists(path):
+            with open(path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode()
+        return None
     except:
         return None
 
-FULL_LOGO = "Dsquares.png"  
-ICON_INNER = "DSQ_LOGO-removebg-preview (1).png" 
+# أسامي اللوجوهات الجديدة (تأكد إنها مرفوعة بنفس الاسم على GitHub)
+OUTER_LOGO = "logo_icon.png"  
+INNER_LOGO = "Small_Logo.png" 
 
-full_logo_64 = get_image_base64(FULL_LOGO)
-icon_inner_64 = get_image_base64(ICON_INNER)
+full_logo_64 = get_image_base64(OUTER_LOGO)
+icon_inner_64 = get_image_base64(INNER_LOGO)
 
 # CSS المطور (تعديل لون الفلتر للكحلي + تنسيق الهيدر)
 st.markdown(f"""
@@ -84,18 +89,21 @@ EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Sc
 st.sidebar.title("🔐 Access Control")
 password = st.sidebar.text_input("Enter Password", type="password")
 
-if not password or (password != "admin123" and password != "ds2024"):
+if not password or (password not in ["admin123", "ds2024"]):
     st.write("")
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
+    # الهيدر الداخلي (اللوجو الصغير 32px + العنوان)
     if icon_inner_64:
         st.markdown(f"""
             <div class="header-container">
@@ -103,6 +111,8 @@ if df_f is not None:
                 <span class="main-title">DSQUARES INSIGHTS HUB</span>
             </div>
             """, unsafe_allow_html=True)
+    else:
+        st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
 
     # Sidebar Filters (كلها بتسمع في ff)
     st.sidebar.divider()
@@ -127,16 +137,14 @@ if df_f is not None:
 
     with tabs[0]:
         k1, k2, k3, k4 = st.columns(4)
-        # الربط التام بالفلتر
         k1.metric("Total Tickets", f"{len(ff):,}")
-        k2.metric("Total Inbound", f"{int(to_n(df_s['Offered']).sum()):,}") # Inbound ثابت MoM
+        k2.metric("Total Inbound", f"{int(to_n(df_s['Offered']).sum()):,}")
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
         st.subheader("🗓️ Volume Trend per Microtype")
         
-        # Peak Days مربوط بالفلتر ff
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         
@@ -181,12 +189,13 @@ if df_f is not None:
     
     with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
-        # فلترة الجودة (لو الموظفين مربوطين ببروجكت معين الفلتر هيسمع هنا)
         clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
         clean_q.loc[clean_q['Agent Name'] == 'Total', 'Login ID'] = ''
         plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
+        
+        # تسمية الـ Legend بشكل احترافي EC% و BC%
         fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
