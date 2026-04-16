@@ -22,7 +22,7 @@ def get_image_base64(path):
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - التنسيق النهائي
+# ✅ CSS - التنسيق المعتمد
 st.markdown(f"""
     <style>
     span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; border-radius: 4px !important; }}
@@ -78,7 +78,7 @@ if not st.session_state.authenticated:
         st.markdown('<p class="main-title">Dsquares Insights HUB</p>', unsafe_allow_html=True)
         st.stop()
 
-# ✅ إضافة اللوجو الكبير في السايد بار فوق زر الخروج
+# ✅ إضافة اللوجو الكبير في السايد بار فوق زر الخروج مباشرة
 if full_logo_64:
     st.sidebar.markdown(f'<div style="text-align:center; margin-bottom:20px;"><img src="data:image/png;base64,{full_logo_64}" width="200"/></div>', unsafe_allow_html=True)
 
@@ -86,7 +86,7 @@ if st.sidebar.button("🔓 Log Out"):
     st.session_state.authenticated = False
     st.rerun()
 
-# 3. تحميل ومعالجة البيانات
+# 3. تحميل البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 @st.cache_data(ttl=2)
 def load_all_data():
@@ -155,11 +155,10 @@ if df_f is not None:
         peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
         
-        # ✅ تطهير الـ Hover من الـ N/A
+        # ✅ تطهير الـ Hover من الـ N/A تماماً
         micro_info = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='C')
         hover_data = []
         for d in peak_days['Full_Date_Obj']:
-            # فلترة الأنواع لاستبعاد أي N/A أو Dropped قبل العرض في الـ Hover
             top_m = micro_info[(micro_info['Full_Date_Obj'] == d) & 
                                (~micro_info['Call Microtype'].str.lower().isin(EXCLUDE_LOWER))].sort_values('C', ascending=False).head(5)
             h_text = "<br>".join([f"• {r['Call Microtype']}: {r['C']}" for _, r in top_m.iterrows()])
@@ -197,8 +196,8 @@ if df_f is not None:
 
     with tabs[2]: # 📈 Inbound SLA
         st.subheader("📈 Inbound SLA Performance")
-        # ✅ تغيير المحور y إلى PCA%
-        fig_sla = px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Trend", text_auto='.1f', color_discrete_sequence=[DS_BLUE], labels={"y": "PCA%"})
+        # ✅ تعديل المسمى PCA% بوضوح
+        fig_sla = px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Trend", text_auto='.1f', color_discrete_sequence=[DS_BLUE], labels={"y": "PCA %"})
         st.plotly_chart(fig_sla, use_container_width=True)
         st.dataframe(df_s.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
