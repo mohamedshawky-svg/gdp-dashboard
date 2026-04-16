@@ -68,7 +68,7 @@ if st.sidebar.button("🔓 Log Out"):
     st.session_state.authenticated = False
     st.rerun()
 
-# 3. تحميل البيانات
+# 3. تحميل ومعالجة البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 @st.cache_data(ttl=2)
 def load_all_data():
@@ -90,7 +90,9 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-EXCLUDE_LOWER = ['n/a', 'n.a', 'dropped call', 'call dropped', 'out of our scope', 'other', '0', 'na', ' ', 'n']
+
+# ✅ القائمة السوداء (الكيماوي) - استبعاد تام لكل أشكال الـ N/A والـ Dropped
+EXCLUDE_LOWER = ['n/a', 'n.a', 'n.a ', 'n.a.', 'dropped call', 'call dropped', 'out of our scope', 'other', '0', 'na', ' ', 'n', 'N']
 
 if df_f is not None:
     if icon_inner_64:
@@ -101,7 +103,7 @@ if df_f is not None:
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
     
-    # ✅ base_ff للعمليات اللي مش مرتبطة بفلتر الـ Merchant (زي الـ Inbound الكبير)
+    # نسخة ثابتة للتاريخ فقط (عشان الـ Inbound ميصفرش)
     base_ff = df_f.copy()
     if isinstance(dr, (list, tuple)) and len(dr) == 2:
         base_ff = base_ff[(base_ff['Full_Date_Obj'] >= dr[0]) & (base_ff['Full_Date_Obj'] <= dr[1])]
@@ -127,10 +129,9 @@ if df_f is not None:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         
-        # ✅ إصلاح الـ Total Inbound: لو الفلتر خلاه صفر، نسحب القيمة من الـ base_ff (التاريخ فقط)
-        inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
-        if inb_val == 0 and 'Total Inbound' in base_ff.columns:
-            inb_val = int(to_n(base_ff['Total Inbound']).max())
+        # ✅ الحل النهائي للـ Inbound: لو مفلتر ميرشنت، يسحب الإجمالي من base_ff لنفس الفترة
+        # ده بيضمن إن الـ 5,299 تفضل ظاهرة حتى لو فلترت "الشايع"
+        inb_val = int(to_n(base_ff['Total Inbound']).max()) if 'Total Inbound' in base_ff.columns else 0
         k2.metric("Total Inbound", f"{inb_val:,}")
         
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
@@ -142,15 +143,18 @@ if df_f is not None:
         peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
         
+        # ✅ Hover التطهير: استبعاد الـ N/A والـ Dropped من الـ Hover تماماً
         micro_data = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='C')
-        hover_data = []
+        micro_data = micro_data[~micro_data['Call Microtype'].str.lower().isin(EXCLUDE_LOWER)]
+        
+        hover_texts = []
         for d in peak_days['Full_Date_Obj']:
             top_m = micro_data[micro_data['Full_Date_Obj'] == d].sort_values('C', ascending=False).head(5)
             h_text = "<br>".join([f"• {r['Call Microtype']}: {r['C']}" for _, r in top_m.iterrows()])
-            hover_data.append(h_text if h_text else "No Data")
+            hover_texts.append(h_text if h_text else "Clean Data")
 
         fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
-        fig_v.update_traces(customdata=hover_data, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
+        fig_v.update_traces(customdata=hover_texts, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
         fig_v.update_xaxes(type='category', title=None, tickangle=45)
         st.plotly_chart(fig_v, use_container_width=True)
 
@@ -167,7 +171,7 @@ if df_f is not None:
             st.plotly_chart(px.pie(clean_c(ff, 'Ticket type'), names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(clean_c(ff, 'Call Microtype')['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]: # 💬 WhatsApp MoM
+    with tabs[1]: # 💬 WhatsApp
         st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
         m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
@@ -186,7 +190,7 @@ if df_f is not None:
         st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         st.dataframe(df_s.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
-    with tabs[3]: # 🏆 Quality Board
+    with tabs[3]: # 🏆 Quality
         st.subheader("🏆 Quality Board")
         clean_q = df_q[(df_q['Agent Name'] != 'Total') & (df_q['Agent Name'] != '0') & (~df_q['Agent Name'].str.lower().isin(EXCLUDE_LOWER)) & (to_n(df_q['Total Calls']) > 0)].copy()
         q_plot = clean_q.rename(columns={'EC %': 'EC%', 'BC %': 'BC%'})
@@ -194,7 +198,7 @@ if df_f is not None:
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
-    with tabs[4]: # 🎫 Ticket Explorer
+    with tabs[4]: # 🎫 Explorer
         st.subheader("🎫 Ticket Explorer")
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
