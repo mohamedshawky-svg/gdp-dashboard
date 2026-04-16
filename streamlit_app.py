@@ -5,7 +5,7 @@ from datetime import date
 import base64
 import os
 
-# 1. إعداد الصفحة والـ Theme
+# 1. إعداد الصفحة والـ Theme (تنسيق السطور الأصلي)
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 
 DS_BLUE = "#0055A4"
@@ -20,17 +20,19 @@ def get_image_base64(path):
     except:
         return None
 
-# ✅ ثبت الأسامي دي عندك في GitHub عشان اللوجو ينور
+# أسامي اللوجوهات المعتمدة (تأكد من وجودها في GitHub بنفس الاسم)
 FULL_LOGO = "logo_icon.png"  
 ICON_INNER = "Small_Logo.png" 
 
 full_logo_64 = get_image_base64(FULL_LOGO)
 icon_inner_64 = get_image_base64(ICON_INNER)
 
-# CSS المطور (تنسيقك الأصلي بالمللي)
+# CSS المطور (نفس كودك وتنسيقك)
 st.markdown(f"""
     <style>
-    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
+    span[data-baseweb="tag"] {{
+        background-color: {DS_BLUE} !important;
+    }}
     .main-title {{ 
         color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
         text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
@@ -43,9 +45,12 @@ st.markdown(f"""
     .stMetric, .wa-card {{
         background-color: white !important; padding: 20px !important; border-radius: 12px !important;
         border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
+        text-align: center;
     }}
-    .stDataFrame, div[data-testid="stTable"] {{ background-color: white !important; color: {DS_BLUE} !important; border-radius: 10px; }}
+    .stDataFrame, div[data-testid="stTable"] {{
+        background-color: white !important; color: {DS_BLUE} !important; border-radius: 10px;
+    }}
     [data-testid="stElementToolbar"] {{ display: none; }}
     </style>
     """, unsafe_allow_html=True)
@@ -75,7 +80,9 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Other', 'na', 'n', 'N', ' ', '']
+
+# ✅ التطهير النهائي (كل اللي قولت نشيله)
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
 
 # --- 🔐 شاشة الدخول ---
 st.sidebar.title("🔐 Access Control")
@@ -87,25 +94,43 @@ if not password or (password not in ["admin123", "ds2024"]):
     with c2:
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
+    if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # اللوجو والاسم من الداخل
+    # اللوجو والعنوان الداخلي
     if icon_inner_64:
-        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="header-container">
+                <img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/>
+                <span class="main-title">DSQUARES INSIGHTS HUB</span>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
 
+    # Sidebar Filters
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
     ff = df_f if not (isinstance(dr, (list, tuple)) and len(dr) == 2) else df_f[(df_f['Full_Date_Obj'] >= dr[0]) & (df_f['Full_Date_Obj'] <= dr[1])]
     
-    # الفلاتر (نفس ترتيبك)
+    br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
+    f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
     f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
+    f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
+    f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
+    
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
+    if f_branch: ff = ff[ff[br_col].isin(f_branch)]
     if f_proj: ff = ff[ff['Project'].isin(f_proj)]
+    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
+    if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
     tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
@@ -113,7 +138,7 @@ if df_f is not None:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         
-        # ✅ الحل النهائي للـ Inbound: مربوط بعمود P
+        # ✅ قراءة الـ Total Inbound من عمود P
         inb_val = 0
         if 'Total Inbound' in ff.columns:
             inb_val = int(to_n(ff['Total Inbound']).max())
@@ -127,12 +152,12 @@ if df_f is not None:
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         
-        # ✅ تعديل الـ Chart عشان يرجع واسع وواضح (Category Type)
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
         fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
+        # ✅ رسم الـ 7 Charts كاملة مع الـ EXCLUDE
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
@@ -140,7 +165,6 @@ if df_f is not None:
             st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].isin(EXCLUDE)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Action taken'].isin(EXCLUDE)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         with c2:
-            br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
             st.plotly_chart(px.bar(ff[~ff[br_col].isin(EXCLUDE)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
@@ -164,12 +188,6 @@ if df_f is not None:
         plot_df = clean_q.copy()
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
-        # ✅ العنوان المعدل: Agent Comparison
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
+        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
-
-    with tabs[4]: # Explorer
-        search = st.text_input("🔍 Search Anything...", "")
-        exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
-        st.dataframe(exp_df.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
