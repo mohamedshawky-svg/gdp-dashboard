@@ -22,7 +22,7 @@ def get_image_base64(path):
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - التنسيق النهائي الاحترافي
+# ✅ CSS - التنسيق النهائي الاحترافي (البروز واللون الكحلي)
 st.markdown(f"""
     <style>
     [data-testid="stMetric"] {{
@@ -137,12 +137,11 @@ if df_f is not None:
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # ✅ صيانة Volume Trend: جلب الأرقام الكبيرة الحقيقية
+        # ✅ Volume Trend: الأرقام الحقيقية المظبوطة
         daily_total = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
         
-        # تحضير الـ Hover للـ Microtypes بدون ما نأثر على الـ Total
         micro_data = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='Count')
         micro_data = micro_data[~micro_data['Call Microtype'].str.lower().isin(EXCLUDE_LOWER)]
         
@@ -152,7 +151,8 @@ if df_f is not None:
             txt = "<br>".join([f"• {r['Call Microtype']}: {r['Count']}" for _, r in top_m.iterrows()])
             hover_texts.append(txt if txt else "No Microtypes")
 
-        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days - Real Data)", color_discrete_sequence=[DS_BLUE])
+        # ✅ تم حذف Real Data من العنوان هنا
+        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
         fig_v.update_traces(customdata=hover_texts, hovertemplate="<b>Date: %{x}</b><br>Total Tickets: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
         fig_v.update_xaxes(type='category', title=None, tickangle=45)
         st.plotly_chart(fig_v, use_container_width=True)
