@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 import base64
-import os
+import requests
+from io import BytesIO
 
 # 1. إعداد الصفحة والـ Theme
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
@@ -11,23 +12,24 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-def get_image_base64(path):
+# ✅ تعديل: دالة تسحب اللوجو برابط مباشر من GitHub عشان يظهر فوراً
+@st.cache_data
+def get_remote_image_base64(file_name):
+    # الرابط المباشر للمستودع بتاعك
+    url = f"https://raw.githubusercontent.com/mohamedshawky-svg/gdp-dashboard/main/{file_name}"
     try:
-        if os.path.exists(path):
-            with open(path, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode()
+        response = requests.get(url)
+        if response.status_code == 200:
+            return base64.b64encode(response.content).decode()
         return None
     except:
         return None
 
-# أسامي اللوجوهات اللي إنت رفعتها دلوقتى على GitHub
-FULL_LOGO = "logo_icon.png"  
-ICON_INNER = "Small_Logo.png" 
+# الأسماء اللي إنت رفعتها على GitHub
+full_logo_64 = get_remote_image_base64("logo_icon.png")
+icon_inner_64 = get_remote_image_base64("Small_Logo.png")
 
-full_logo_64 = get_image_base64(FULL_LOGO)
-icon_inner_64 = get_image_base64(ICON_INNER)
-
-# CSS المطور (نفس كودك وتنسيقك)
+# CSS المطور (تعديل لون الفلتر للكحلي + تنسيق الهيدر)
 st.markdown(f"""
     <style>
     span[data-baseweb="tag"] {{
@@ -81,9 +83,9 @@ def to_n(series):
 
 df_f, df_s, df_q = load_all_data()
 
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Other', 'na', 'n', 'N', ' ', '']
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Out of scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
 
-# --- شاشة الدخول ---
+# --- 🔐 شاشة الدخول ---
 st.sidebar.title("🔐 Access Control")
 password = st.sidebar.text_input("Enter Password", type="password")
 
@@ -93,13 +95,15 @@ if not password or (password not in ["admin123", "ds2024"]):
     with c2:
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # ✅ إظهار اللوجو والعنوان من الداخل
+    # إظهار اللوجو والاسم من الداخل
     if icon_inner_64:
         st.markdown(f"""
             <div class="header-container">
@@ -135,7 +139,7 @@ if df_f is not None:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         
-        # ✅ التصحيح: الربط بعمود Total Inbound في الشيت الأساسي (عمود P)
+        # ✅ تعديل: قراءة الـ Total Inbound من عمود P في الشيت المفلتر
         inb_val = 0
         if 'Total Inbound' in ff.columns:
             inb_val = int(to_n(ff['Total Inbound']).max())
@@ -191,11 +195,11 @@ if df_f is not None:
     with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
         clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
+        clean_q.loc[clean_q['Agent Name'] == 'Total', 'Login ID'] = ''
         plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
-        # ✅ العنوان المطلوب: Agent Comparison
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
