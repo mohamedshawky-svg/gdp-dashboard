@@ -12,10 +12,9 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-# ✅ تعديل: دالة تسحب اللوجو برابط مباشر من GitHub عشان يظهر فوراً
+# دالة سحب اللوجو برابط مباشر من GitHub عشان يظهر فوراً
 @st.cache_data
 def get_remote_image_base64(file_name):
-    # الرابط المباشر للمستودع بتاعك
     url = f"https://raw.githubusercontent.com/mohamedshawky-svg/gdp-dashboard/main/{file_name}"
     try:
         response = requests.get(url)
@@ -25,11 +24,11 @@ def get_remote_image_base64(file_name):
     except:
         return None
 
-# الأسماء اللي إنت رفعتها على GitHub
+# سحب الصور من GitHub (تأكد إن الأسامي دي صحيحة عندك)
 full_logo_64 = get_remote_image_base64("logo_icon.png")
 icon_inner_64 = get_remote_image_base64("Small_Logo.png")
 
-# CSS المطور (تعديل لون الفلتر للكحلي + تنسيق الهيدر)
+# CSS المطور (تنسيق الهيدر واللوجو)
 st.markdown(f"""
     <style>
     span[data-baseweb="tag"] {{
@@ -82,7 +81,6 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-
 EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Out of scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
 
 # --- 🔐 شاشة الدخول ---
@@ -103,7 +101,7 @@ if not password or (password not in ["admin123", "ds2024"]):
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # إظهار اللوجو والاسم من الداخل
+    # ✅ اللوجو الصغير جنب الاسم جوه الداشبورد
     if icon_inner_64:
         st.markdown(f"""
             <div class="header-container">
@@ -139,7 +137,7 @@ if df_f is not None:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         
-        # ✅ تعديل: قراءة الـ Total Inbound من عمود P في الشيت المفلتر
+        # ✅ قراءة الـ Total Inbound من عمود P
         inb_val = 0
         if 'Total Inbound' in ff.columns:
             inb_val = int(to_n(ff['Total Inbound']).max())
@@ -152,18 +150,7 @@ if df_f is not None:
         st.subheader("🗓 Volume Trend per Microtype")
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
-        
-        ff_trend = ff[ff['Full_Date_Obj'].isin(peak_days['Full_Date_Obj'])]
-        ff_trend = ff_trend[~ff_trend['Call Microtype'].isin(EXCLUDE)]
-        micro_sum = ff_trend.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='N')
-
-        hover_list = []
-        for d in peak_days['Full_Date_Obj']:
-            d_data = micro_sum[micro_sum['Full_Date_Obj'] == d].sort_values('N', ascending=False)
-            hover_list.append("<br>".join([f"{r['Call Microtype']}: {r['N']}" for _, r in d_data.iterrows()]))
-
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
-        fig_v.update_traces(customdata=hover_list, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br>-------------------<br>%{customdata}<extra></extra>")
         fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
@@ -179,27 +166,15 @@ if df_f is not None:
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]:
-        st.subheader("💬 WhatsApp MoM SLA Analysis")
-        wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
-        m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
-        if len(m_list) > 0:
-            cols = st.columns(4)
-            for i, m in enumerate(m_list):
-                m_data = ff[ff['Month_Name'] == m]
-                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)]), len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
-                perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
-                with cols[i % 4]:
-                    st.markdown(f'<div class="wa-card"><h5 style="color:{DS_LIGHT_BLUE}">26-{m}</h5><h2 style="margin:10px 0;">{perc:.1f}%</h2><p>✅ On-Time: {ot} | ❌ Late: {lt}</p></div>', unsafe_allow_html=True)
-    
     with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
         clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
-        clean_q.loc[clean_q['Agent Name'] == 'Total', 'Login ID'] = ''
         plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        
+        # ✅ العنوان المعدل: Agent Comparison
+        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
