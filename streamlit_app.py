@@ -22,7 +22,7 @@ def get_image_base64(path):
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - التنسيق النهائي للبطاقات والجداول والـ Hover
+# ✅ CSS - التنسيق النهائي الاحترافي
 st.markdown(f"""
     <style>
     [data-testid="stMetric"] {{
@@ -33,14 +33,9 @@ st.markdown(f"""
         padding: 15px !important;
     }}
     .wa-card {{ 
-        background-color: white !important; 
-        padding: 18px !important; 
-        border-radius: 12px !important; 
-        border: 1px solid #eee !important;
-        border-top: 6px solid {DS_BLUE} !important; 
-        box-shadow: 0 12px 24px rgba(0,0,0,0.12) !important; 
-        text-align: center;
-        margin-bottom: 20px;
+        background-color: white !important; padding: 18px !important; border-radius: 12px !important; 
+        border: 1px solid #eee !important; border-top: 6px solid {DS_BLUE} !important; 
+        box-shadow: 0 12px 24px rgba(0,0,0,0.12) !important; text-align: center; margin-bottom: 20px;
     }}
     .wa-card h5 {{ margin-bottom: 5px; color: #444; font-size: 16px; font-weight: bold; }}
     .wa-card h2 {{ margin: 0; color: {DS_BLUE}; font-size: 28px; font-weight: 900; }}
@@ -73,12 +68,11 @@ if not st.session_state.authenticated:
         st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
         st.stop()
 
-# ✅ زر الـ Log Out
 if st.sidebar.button("🔓 Log Out"):
     st.session_state.authenticated = False
     st.rerun()
 
-# 3. تحميل البيانات
+# 3. تحميل ومعالجة البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 @st.cache_data(ttl=2)
 def load_all_data():
@@ -101,7 +95,6 @@ def to_n(series):
 
 df_f, df_s, df_q = load_all_data()
 
-# ✅ القائمة السوداء (إعدام كل الكلمات المحظورة)
 EXCLUDE_LOWER = [
     'n/a', 'n.a', 'n.a ', 'n.a.', 'dropped call', 'call dropped', 
     'out of our scope', 'out of scope', 'other', '0', 'na', ' ', 'n'
@@ -111,10 +104,11 @@ if df_f is not None:
     if icon_inner_64:
         st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="40"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
 
-    # 4. الفلاتر (الـ 5 كاملين)
+    # 4. الفلاتر
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
+    
     ff = df_f.copy()
     if isinstance(dr, (list, tuple)) and len(dr) == 2:
         ff = ff[(ff['Full_Date_Obj'] >= dr[0]) & (ff['Full_Date_Obj'] <= dr[1])]
@@ -132,11 +126,6 @@ if df_f is not None:
     if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
     if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
-    # دالة الفلترة للتشارتس
-    def clean_df(df, col):
-        return df[~df[col].astype(str).str.lower().isin(EXCLUDE_LOWER)]
-
-    # 5. التابات
     tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
     with tabs[0]: # 🏠 Overview
@@ -148,36 +137,37 @@ if df_f is not None:
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # ✅ Volume Trend مع سحر الـ Hover (Microtypes مترتبة)
-        daily_sum = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='Count')
-        daily_sum = clean_df(daily_sum, 'Call Microtype')
-        daily_vol = daily_sum.groupby('Full_Date_Obj')['Count'].sum().reset_index(name='Total')
-        peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
+        # ✅ صيانة Volume Trend: جلب الأرقام الكبيرة الحقيقية
+        daily_total = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
+        peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
         
-        hover_dict = {}
+        # تحضير الـ Hover للـ Microtypes بدون ما نأثر على الـ Total
+        micro_data = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='Count')
+        micro_data = micro_data[~micro_data['Call Microtype'].str.lower().isin(EXCLUDE_LOWER)]
+        
+        hover_texts = []
         for d in peak_days['Full_Date_Obj']:
-            day_data = daily_sum[daily_sum['Full_Date_Obj'] == d].sort_values('Count', ascending=False).head(5)
-            hover_text = "<br>".join([f"• {row['Call Microtype']}: {row['Count']}" for _, row in day_data.iterrows()])
-            hover_dict[str(d)] = hover_text
-            
-        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
-        fig_v.update_traces(customdata=[hover_dict.get(d, "No Data") for d in peak_days['Date_Str']],
-                           hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
+            top_m = micro_data[micro_data['Full_Date_Obj'] == d].sort_values('Count', ascending=False).head(5)
+            txt = "<br>".join([f"• {r['Call Microtype']}: {r['Count']}" for _, r in top_m.iterrows()])
+            hover_texts.append(txt if txt else "No Microtypes")
+
+        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days - Real Data)", color_discrete_sequence=[DS_BLUE])
+        fig_v.update_traces(customdata=hover_texts, hovertemplate="<b>Date: %{x}</b><br>Total Tickets: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
         fig_v.update_xaxes(type='category', title=None, tickangle=45)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.bar(clean_df(ff, 'Merchant')['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(clean_df(ff, 'Project')['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(clean_df(ff, 'Ticket subtype')['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(clean_df(ff, 'Action taken')['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Merchant'].str.lower().isin(EXCLUDE_LOWER)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Project'].str.lower().isin(EXCLUDE_LOWER)]['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].str.lower().isin(EXCLUDE_LOWER)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Action taken'].str.lower().isin(EXCLUDE_LOWER)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         with c2:
-            st.plotly_chart(px.bar(clean_df(ff, br_col)[br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
-            st.plotly_chart(px.pie(clean_df(ff, 'Ticket type'), names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
-            st.plotly_chart(px.bar(clean_df(ff, 'Call Microtype')['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff[br_col].str.lower().isin(EXCLUDE_LOWER)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
+            st.plotly_chart(px.pie(ff[~ff['Ticket type'].str.lower().isin(EXCLUDE_LOWER)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Call Microtype'].str.lower().isin(EXCLUDE_LOWER)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
     with tabs[1]: # 💬 WhatsApp MoM
         st.subheader("💬 WhatsApp MoM SLA Analysis")
