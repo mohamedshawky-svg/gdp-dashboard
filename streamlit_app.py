@@ -11,17 +11,19 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-# دالة لقراءة الصور بأمان من GitHub
+# --- دالة صمام الأمان لقراءة اللوجو من السيرفر ---
 def get_image_base64(path):
     try:
-        if os.path.exists(path):
-            with open(path, "rb") as image_file:
+        # البحث عن الملف في المجلد الحالي للسيرفر
+        actual_path = os.path.join(os.getcwd(), path)
+        if os.path.exists(actual_path):
+            with open(actual_path, "rb") as image_file:
                 return base64.b64encode(image_file.read()).decode()
         return None
-    except:
+    except Exception:
         return None
 
-# أسامي اللوجوهات الجديدة (تأكد إنها مرفوعة بنفس الاسم على GitHub)
+# الأسماء المعتمدة عندك على GitHub
 OUTER_LOGO = "logo_icon.png"  
 INNER_LOGO = "Small_Logo.png" 
 
@@ -31,10 +33,7 @@ icon_inner_64 = get_image_base64(INNER_LOGO)
 # CSS المطور (تعديل لون الفلتر للكحلي + تنسيق الهيدر)
 st.markdown(f"""
     <style>
-    /* تغيير لون الفلتر المختار (Tags) للكحلي */
-    span[data-baseweb="tag"] {{
-        background-color: {DS_BLUE} !important;
-    }}
+    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
     .main-title {{ 
         color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
         text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
@@ -59,16 +58,15 @@ st.markdown(f"""
 
 # 2. تحميل البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
-URL_F = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407"
-URL_S = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0"
-URL_Q = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747"
-
 @st.cache_data(ttl=2)
 def load_all_data():
     try:
-        f = pd.read_csv(URL_F, dtype=str).fillna("N/A")
-        s = pd.read_csv(URL_S, dtype=str).fillna("0")
-        q = pd.read_csv(URL_Q, dtype=str).fillna("0")
+        f_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407"
+        s_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0"
+        q_url = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=468167747"
+        f = pd.read_csv(f_url, dtype=str).fillna("N/A")
+        s = pd.read_csv(s_url, dtype=str).fillna("0")
+        q = pd.read_csv(q_url, dtype=str).fillna("0")
         d_col = next((c for c in f.columns if 'created' in c.lower() or 'date' in c.lower()), f.columns[0])
         f['Full_Date_Obj'] = pd.to_datetime(f[d_col], errors='coerce').dt.date
         f = f.dropna(subset=['Full_Date_Obj'])
@@ -82,7 +80,6 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-
 EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Out of scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
 
 # --- 🔐 شاشة الدخول ---
@@ -96,14 +93,13 @@ if not password or (password not in ["admin123", "ds2024"]):
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
         else:
-            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:100px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # الهيدر الداخلي (اللوجو الصغير 32px + العنوان)
     if icon_inner_64:
         st.markdown(f"""
             <div class="header-container">
@@ -114,21 +110,22 @@ if df_f is not None:
     else:
         st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
 
-    # Sidebar Filters (كلها بتسمع في ff)
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓️ Select Date Range", [min_d, max_d])
     ff = df_f if not (isinstance(dr, (list, tuple)) and len(dr) == 2) else df_f[(df_f['Full_Date_Obj'] >= dr[0]) & (df_f['Full_Date_Obj'] <= dr[1])]
     
+    # فلترة الـ Inbound بناءً على التواريخ المختارة
+    selected_months = pd.to_datetime(ff['Full_Date_Obj']).dt.strftime('%b').unique()
+    fs = df_s[df_s['Month'].isin(selected_months)]
+
     br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
-    f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
     f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
     f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
     f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
     
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
-    if f_branch: ff = ff[ff[br_col].isin(f_branch)]
     if f_proj: ff = ff[ff['Project'].isin(f_proj)]
     if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
     if f_action: ff = ff[ff['Action taken'].isin(f_action)]
@@ -138,13 +135,13 @@ if df_f is not None:
     with tabs[0]:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
-        k2.metric("Total Inbound", f"{int(to_n(df_s['Offered']).sum()):,}")
+        inbound_val = int(to_n(fs['Offered']).sum()) if not fs.empty else int(to_n(df_s['Offered']).sum())
+        k2.metric("Total Inbound", f"{inbound_val:,}")
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
         st.subheader("🗓️ Volume Trend per Microtype")
-        
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         
@@ -159,7 +156,6 @@ if df_f is not None:
 
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
         fig_v.update_traces(customdata=hover_list, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br>-------------------<br>%{customdata}<extra></extra>")
-        fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
@@ -174,40 +170,26 @@ if df_f is not None:
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]:
-        st.subheader("💬 WhatsApp MoM SLA Analysis")
-        wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
-        m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
-        if len(m_list) > 0:
-            cols = st.columns(4)
-            for i, m in enumerate(m_list):
-                m_data = ff[ff['Month_Name'] == m]
-                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)]), len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
-                perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
-                with cols[i % 4]:
-                    st.markdown(f'<div class="wa-card"><h5 style="color:{DS_LIGHT_BLUE}">26-{m}</h5><h2 style="margin:10px 0;">{perc:.1f}%</h2><p>✅ On-Time: {ot} | ❌ Late: {lt}</p></div>', unsafe_allow_html=True)
-    
     with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
         clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
         clean_q.loc[clean_q['Agent Name'] == 'Total', 'Login ID'] = ''
         plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
-        plot_df['EC%'] = to_n(plot_df['EC %'])
-        plot_df['BC%'] = to_n(plot_df['BC %'])
         
         # تسمية الـ Legend بشكل احترافي EC% و BC%
-        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        fig_q = px.bar(plot_df, x='Agent Name', y=[to_n(plot_df['EC %']), to_n(plot_df['BC %'])], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        new_names = {'wide_variable_0':'EC%', 'wide_variable_1':'BC%'}
+        fig_q.for_each_trace(lambda t: t.update(name = new_names.get(t.name, t.name)))
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[2]: # Inbound
         st.subheader("📈 Inbound SLA Summary")
-        st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-        st.dataframe(df_s.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
+        st.plotly_chart(px.bar(fs, x='Month', y=to_n(fs['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        st.dataframe(fs.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[4]: # Explorer
-        st.subheader("🎫 Ticket Explorer")
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
         st.dataframe(exp_df.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
