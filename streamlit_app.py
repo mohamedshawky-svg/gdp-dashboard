@@ -11,42 +11,28 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-# دالة لقراءة الصور من GitHub
 def get_image_base64(path):
     try:
         if os.path.exists(path):
             with open(path, "rb") as image_file:
                 return base64.b64encode(image_file.read()).decode()
         return None
-    except:
-        return None
+    except: return None
 
-# الأسماء اللي إنت حددتها بالظبط
-OUTER_LOGO = "logo_icon.png"  # اللوجو اللي بره
-INNER_LOGO = "Small_Logo.png" # اللوجو اللي جوه
+# أسامي اللوجوهات الجديدة
+OUTER_LOGO = "logo_icon.png"  
+INNER_LOGO = "Small_Logo.png" 
 
 full_logo_64 = get_image_base64(OUTER_LOGO)
 icon_inner_64 = get_image_base64(INNER_LOGO)
 
-# CSS لتنسيق الألوان والهيدر
 st.markdown(f"""
     <style>
     span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
-    .main-title {{ 
-        color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
-        text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
-    }}
-    .header-container {{
-        display: flex; align-items: center; justify-content: center;
-        margin-top: 10px; margin-bottom: 30px; gap: 12px;
-    }}
+    .main-title {{ color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; text-align: center; margin: 0; font-family: 'Arial Black', sans-serif; }}
+    .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 30px; gap: 12px; }}
     [data-testid="stMetricValue"] {{ font-size: 30px; color: {DS_BLUE} !important; font-weight: bold; }}
-    .stMetric, .wa-card {{
-        background-color: white !important; padding: 20px !important; border-radius: 12px !important;
-        border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        text-align: center;
-    }}
+    .stMetric, .wa-card {{ background-color: white !important; padding: 20px !important; border-radius: 12px !important; border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; text-align: center; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -73,30 +59,19 @@ def to_n(series):
 df_f, df_s, df_q = load_all_data()
 EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Other', 'n', 'N', ' ', '']
 
-# --- 🔐 شاشة الدخول ---
+# --- شاشة الدخول ---
 password = st.sidebar.text_input("Enter Password", type="password")
 if not password or (password not in ["admin123", "ds2024"]):
-    st.write("")
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
-        if full_logo_64:
-            st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}'>DSQUARES</h1>", unsafe_allow_html=True)
+        if full_logo_64: st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" width="400"/></div>', unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
     if icon_inner_64:
-        st.markdown(f"""
-            <div class="header-container">
-                <img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/>
-                <span class="main-title">DSQUARES INSIGHTS HUB</span>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
+        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="32"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
 
     # الفلاتر
     st.sidebar.divider()
@@ -108,8 +83,13 @@ if df_f is not None:
 
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
     f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
+    f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
+    f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
+
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
     if f_proj: ff = ff[ff['Project'].isin(f_proj)]
+    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
+    if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
     tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
@@ -125,7 +105,6 @@ if df_f is not None:
         st.subheader("🗓️ Volume Trend per Microtype")
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
-        
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
         st.plotly_chart(fig_v, use_container_width=True)
 
@@ -142,11 +121,14 @@ if df_f is not None:
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[3]: # Quality
+    with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
         clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
         plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
-        fig_q = px.bar(plot_df, x='Agent Name', y=[to_n(plot_df['EC %']), to_n(plot_df['BC %'])], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE])
+        # تسمية الـ Legend بشكل احترافي
+        fig_q = px.bar(plot_df, x='Agent Name', y=[to_n(plot_df['EC %']), to_n(plot_df['BC %'])], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'variable': 'Metric'})
+        new_names = {'wide_variable_0':'EC%', 'wide_variable_1':'BC%'}
+        fig_q.for_each_trace(lambda t: t.update(name = new_names.get(t.name, t.name)))
         st.plotly_chart(fig_q, use_container_width=True)
         st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
