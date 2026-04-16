@@ -38,6 +38,9 @@ st.markdown(f"""
         border: 1px solid #f0f2f6 !important; border-top: 6px solid {DS_BLUE} !important; 
         box-shadow: 0 12px 24px rgba(0,0,0,0.12) !important; text-align: center; margin-bottom: 25px;
     }}
+    .wa-card h5 {{ margin-bottom: 5px; color: #444; font-size: 16px; font-weight: bold; }}
+    .wa-card h2 {{ margin: 0; color: {DS_BLUE}; font-size: 28px; font-weight: 900; }}
+    .wa-card p {{ font-size: 14px; margin-top: 5px; color: #555; font-weight: 700; }}
     .main-title {{ color: {DS_BLUE} !important; font-weight: 900; font-size: 38px !important; text-align: center; }}
     .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 40px; gap: 15px; }}
     [data-testid="stMetricValue"] {{ font-size: 30px !important; color: {DS_BLUE} !important; font-weight: bold; }}
@@ -68,7 +71,7 @@ if st.sidebar.button("🔓 Log Out"):
     st.session_state.authenticated = False
     st.rerun()
 
-# 3. تحميل البيانات
+# 3. تحميل ومعالجة البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 @st.cache_data(ttl=2)
 def load_all_data():
@@ -90,11 +93,11 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-EXCLUDE_LOWER = ['n/a', 'n.a', 'dropped call', 'call dropped', 'out of our scope', 'other', '0', 'na', ' ', 'n']
+EXCLUDE_LOWER = ['n/a', 'n.a', 'dropped call', 'call dropped', 'out of our scope', 'other', '0', 'na', ' ', 'n', 'N']
 
 if df_f is not None:
     if icon_inner_64:
-        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="45"/><span class="main-title">Dsquares Insights HUB</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="40"/><span class="main-title">Dsquares Insights HUB</span></div>', unsafe_allow_html=True)
 
     # 4. الفلاتر
     st.sidebar.divider()
@@ -118,65 +121,84 @@ if df_f is not None:
     if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
     if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
+    def clean_c(df, c): return df[~df[c].astype(str).str.lower().isin(EXCLUDE_LOWER)]
+
     tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
     with tabs[0]: # 🏠 Overview
         k1, k2, k3, k4 = st.columns(4)
         inb_val = len(ff[ff['Type'].str.contains('Inbound', case=False, na=False)])
         wa_val = len(ff[ff['Type'].str.contains('WhatsApp', case=False, na=False)])
-        
         k1.metric("Total Tickets", f"{len(ff):,}")
         k2.metric("Total Inbound", f"{inb_val:,}")
         k3.metric("Total WhatsApp", f"{wa_val:,}")
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # Volume Trend
+        # ✅ Volume Trend مع رجوع الـ Microtypes في الـ Hover
         daily_total = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_total.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
-        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
+        
+        micro_info = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='C')
+        micro_info = clean_c(micro_info, 'Call Microtype')
+        hover_data = []
+        for d in peak_days['Full_Date_Obj']:
+            top_m = micro_info[micro_info['Full_Date_Obj'] == d].sort_values('C', ascending=False).head(5)
+            h_text = "<br>".join([f"• {r['Call Microtype']}: {r['C']}" for _, r in top_m.iterrows()])
+            hover_data.append(h_text if h_text else "No Data")
+
+        fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend", color_discrete_sequence=[DS_BLUE])
+        fig_v.update_traces(customdata=hover_data, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
         fig_v.update_xaxes(type='category', title=None, tickangle=45)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
-        def clean_c(df, c): return df[~df[c].astype(str).str.lower().isin(EXCLUDE_LOWER)]
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(px.bar(clean_c(ff, 'Merchant')['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
             st.plotly_chart(px.bar(clean_c(ff, 'Project')['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            
-            # ✅ الربط بين Subtype والـ Ticket Type
-            subtype_data = clean_c(ff, 'Ticket subtype')
-            st_counts = subtype_data.groupby(['Ticket subtype', 'Ticket type']).size().reset_index(name='count')
-            st_counts = st_counts.sort_values('count', ascending=False).head(10)
-            fig_st = px.bar(st_counts, x='Ticket subtype', y='count', title="5. Top Sub-types (Hover to see Ticket Type)", text_auto=True, color_discrete_sequence=[DS_BLUE],
-                            hover_data={'Ticket type': True, 'count': True, 'Ticket subtype': False})
+            # الربط: Subtype ⬅️ Ticket Type
+            st_data = clean_c(ff, 'Ticket subtype')
+            st_counts = st_data.groupby(['Ticket subtype', 'Ticket type']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
+            fig_st = px.bar(st_counts, x='Ticket subtype', y='count', title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE], hover_data={'Ticket type': True, 'count': True, 'Ticket subtype': False})
             fig_st.update_traces(hovertemplate="<b>Sub-type:</b> %{x}<br><b>Type:</b> %{customdata[0]}<br><b>Count:</b> %{y}")
             st.plotly_chart(fig_st, use_container_width=True)
-            
             st.plotly_chart(px.bar(clean_c(ff, 'Action taken')['Action taken'].value_counts().head(10), title="7. Action Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            
         with c2:
-            # ✅ الربط بين الفرع والميرشنت
-            branch_data = clean_c(ff, br_col)
-            br_counts = branch_data.groupby([br_col, 'Merchant']).size().reset_index(name='count')
-            br_counts = br_counts.sort_values('count', ascending=False).head(10)
-            fig_br = px.bar(br_counts, x=br_col, y='count', title="2. Top Branches (Hover to see Merchant)", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE],
-                            hover_data={'Merchant': True, 'count': True, br_col: False})
+            # الربط: فرع ⬅️ ميرشنت
+            br_data = clean_c(ff, br_col)
+            br_counts = br_data.groupby([br_col, 'Merchant']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
+            fig_br = px.bar(br_counts, x=br_col, y='count', title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE], hover_data={'Merchant': True, 'count': True, br_col: False})
             fig_br.update_traces(hovertemplate="<b>Branch:</b> %{x}<br><b>Merchant:</b> %{customdata[0]}<br><b>Count:</b> %{y}")
             st.plotly_chart(fig_br, use_container_width=True)
-            
             st.plotly_chart(px.pie(clean_c(ff, 'Ticket type'), names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
-            
-            # ✅ الربط بين Microtype والـ Subtype
-            micro_data = clean_c(ff, 'Call Microtype')
-            mi_counts = micro_data.groupby(['Call Microtype', 'Ticket subtype']).size().reset_index(name='count')
-            mi_counts = mi_counts.sort_values('count', ascending=False).head(10)
-            fig_mi = px.bar(mi_counts, x='Call Microtype', y='count', title="6. Top Microtypes (Hover to see Sub-type)", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE],
-                            hover_data={'Ticket subtype': True, 'count': True, 'Call Microtype': False})
+            # الربط: Microtype ⬅️ Subtype
+            mi_data = clean_c(ff, 'Call Microtype')
+            mi_counts = mi_data.groupby(['Call Microtype', 'Ticket subtype']).size().reset_index(name='count').sort_values('count', ascending=False).head(10)
+            fig_mi = px.bar(mi_counts, x='Call Microtype', y='count', title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE], hover_data={'Ticket subtype': True, 'count': True, 'Call Microtype': False})
             fig_mi.update_traces(hovertemplate="<b>Microtype:</b> %{x}<br><b>Sub-type:</b> %{customdata[0]}<br><b>Count:</b> %{y}")
             st.plotly_chart(fig_mi, use_container_width=True)
+
+    with tabs[1]: # 💬 WhatsApp MoM
+        st.subheader("💬 WhatsApp MoM SLA Summary")
+        wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
+        m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
+        if len(m_list) > 0:
+            cols = st.columns(4)
+            for i, m in enumerate(m_list):
+                m_data = ff[ff['Month_Name'] == m]
+                wa_m = m_data[m_data['Type'].str.contains('WhatsApp', case=False, na=False)]
+                ot = len(wa_m[wa_m[wa_col].str.contains('On-Time', na=False, case=False)])
+                lt = len(wa_m[wa_m[wa_col].str.contains('Late', na=False, case=False)])
+                perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
+                with cols[i % 4]:
+                    st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ On-Time: {ot} | ❌ Late: {lt}</p></div>', unsafe_allow_html=True)
+
+    with tabs[2]: # 📈 Inbound SLA
+        st.subheader("📈 Inbound SLA Performance")
+        st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Trend", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        st.dataframe(df_s.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[3]: # 🏆 Quality Board
         st.subheader("🏆 Quality Board")
@@ -187,6 +209,6 @@ if df_f is not None:
         st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[4]: # 🎫 Ticket Explorer
-        search = st.text_input("🔍 Search Anything...", "")
+        search = st.text_input("🔍 Search Tickets...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
         st.dataframe(exp_df.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
