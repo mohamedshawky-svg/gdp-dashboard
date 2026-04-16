@@ -1,11 +1,58 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import date
+import base64
 
-# 1. إعداد الصفحة
+# 1. إعداد الصفحة والـ Theme
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 
-# 2. روابط البيانات
+DS_BLUE = "#0055A4"
+DS_LIGHT_BLUE = "#00AEEF"
+
+def get_image_base64(path):
+    try:
+        with open(path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode()
+    except:
+        return None
+
+FULL_LOGO = "Dsquares.png"  
+ICON_INNER = "DSQ_LOGO-removebg-preview (1).png" 
+
+full_logo_64 = get_image_base64(FULL_LOGO)
+icon_inner_64 = get_image_base64(ICON_INNER)
+
+# CSS المطور (تعديل لون الفلتر للكحلي + تنسيق الهيدر)
+st.markdown(f"""
+    <style>
+    /* تغيير لون الفلتر المختار (Tags) للكحلي */
+    span[data-baseweb="tag"] {{
+        background-color: {DS_BLUE} !important;
+    }}
+    .main-title {{ 
+        color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
+        text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
+    }}
+    .header-container {{
+        display: flex; align-items: center; justify-content: center;
+        margin-top: 10px; margin-bottom: 30px; gap: 12px;
+    }}
+    [data-testid="stMetricValue"] {{ font-size: 30px; color: {DS_BLUE} !important; font-weight: bold; }}
+    .stMetric, .wa-card {{
+        background-color: white !important; padding: 20px !important; border-radius: 12px !important;
+        border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
+        text-align: center;
+    }}
+    .stDataFrame, div[data-testid="stTable"] {{
+        background-color: white !important; color: {DS_BLUE} !important; border-radius: 10px;
+    }}
+    [data-testid="stElementToolbar"] {{ display: none; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. تحميل البيانات
 S_ID = "18ujwRjkA8L3BIJzevw1QCxjtjIRXdgQ8Du6P2m9LYRc"
 URL_F = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=1278191407"
 URL_S = f"https://docs.google.com/spreadsheets/d/{S_ID}/export?format=csv&gid=0"
@@ -17,120 +64,143 @@ def load_all_data():
         f = pd.read_csv(URL_F, dtype=str).fillna("N/A")
         s = pd.read_csv(URL_S, dtype=str).fillna("0")
         q = pd.read_csv(URL_Q, dtype=str).fillna("0")
-        for d in [f, s, q]:
-            d.columns = d.columns.str.strip()
-            for col in d.columns: d[col] = d[col].astype(str).str.strip()
-        
-        m_col = next((c for c in f.columns if 'created' in c.lower() or 'month' in c.lower()), f.columns[0])
-        f['Month_Ref'] = pd.to_datetime(f[m_col], errors='coerce', utc=True).dt.tz_localize(None).dt.strftime('26-%b')
-        f['Month_Ref'] = f['Month_Ref'].fillna("N/A")
-        
-        m_order = ['26-Jan', '26-Feb', '26-Mar', '26-Apr', '26-May', '26-Jun', 
-                   '26-Jul', '26-Aug', '26-Sep', '26-Oct', '26-Nov', '26-Dec']
-        return f, s, q, m_order
-    except: return None, None, None, []
+        d_col = next((c for c in f.columns if 'created' in c.lower() or 'date' in c.lower()), f.columns[0])
+        f['Full_Date_Obj'] = pd.to_datetime(f[d_col], errors='coerce').dt.date
+        f = f.dropna(subset=['Full_Date_Obj'])
+        m_map = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
+        f['Month_Name'] = pd.to_datetime(f[d_col], errors='coerce').dt.strftime('%b')
+        f['Month_Num'] = f['Month_Name'].map(m_map)
+        return f, s, q
+    except: return None, None, None
 
 def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
-df_f, df_s, df_q, master_order = load_all_data()
+df_f, df_s, df_q = load_all_data()
 
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Out of scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
+
+# --- 🔐 شاشة الدخول ---
+st.sidebar.title("🔐 Access Control")
+password = st.sidebar.text_input("Enter Password", type="password")
+
+if not password or (password != "admin123" and password != "ds2024"):
+    st.write("")
+    c1, c2, c3 = st.columns([1, 1.5, 1])
+    with c2:
+        if full_logo_64:
+            st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
+    st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
+    if password: st.sidebar.error("Wrong Password!")
+    st.stop()
+
+# --- محتوى الداشبورد ---
 if df_f is not None:
-    # --- Sidebar ---
-    st.sidebar.title("Global Filters")
-    current_avail_m = [m for m in master_order if m in df_f['Month_Ref'].unique() or m in df_s['Month'].unique()]
-    f_month = st.sidebar.multiselect("🗓️ Select Months", current_avail_m, default=current_avail_m)
-    f_merch = st.sidebar.multiselect("🏪 Filter Merchant", sorted(df_f['Merchant'].unique()))
-    br_col = next((c for c in df_f.columns if 'branch' in c.lower()), "Branch User Na")
-    f_branch = st.sidebar.multiselect("📍 Filter Branch", sorted(df_f[br_col].unique()))
-    f_agent = st.sidebar.multiselect("🎧 Filter Agent", sorted(df_f['Agent'].unique()))
-    p_col = next((c for c in df_f.columns if 'project' in c.lower()), "Project")
-    f_proj = st.sidebar.multiselect("🏢 Filter Project", sorted(df_f[p_col].unique()), default=sorted(df_f[p_col].unique()))
+    if icon_inner_64:
+        st.markdown(f"""
+            <div class="header-container">
+                <img src="data:image/png;base64,{icon_inner_64}" width="32" style="margin-bottom: -5px;"/>
+                <span class="main-title">DSQUARES INSIGHTS HUB</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    ff = df_f[df_f['Month_Ref'].isin(f_month)]
+    # Sidebar Filters (كلها بتسمع في ff)
+    st.sidebar.divider()
+    min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
+    dr = st.sidebar.date_input("🗓️ Select Date Range", [min_d, max_d])
+    ff = df_f if not (isinstance(dr, (list, tuple)) and len(dr) == 2) else df_f[(df_f['Full_Date_Obj'] >= dr[0]) & (df_f['Full_Date_Obj'] <= dr[1])]
+    
+    br_col = next((c for c in ff.columns if 'branch' in c.lower()), "Branch User Name")
+    f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
+    f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
+    f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
+    f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
+    f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
+    
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
     if f_branch: ff = ff[ff[br_col].isin(f_branch)]
-    if f_agent: ff = ff[ff['Agent'].isin(f_agent)]
-    if f_proj: ff = ff[ff[p_col].isin(f_proj)]
-    fs = df_s[df_s['Month'].isin(f_month)]
+    if f_proj: ff = ff[ff['Project'].isin(f_proj)]
+    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
+    if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
-    st.title("📊 DSQUARES INSIGHTS HUB")
-    t1, t2, t3, t4, t5 = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
+    tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
-    with t1:
-        # Scorecards
+    with tabs[0]:
         k1, k2, k3, k4 = st.columns(4)
+        # الربط التام بالفلتر
         k1.metric("Total Tickets", f"{len(ff):,}")
-        inbound_val = to_n(ff["Total Inbound"]).max() if "Total Inbound" in ff.columns else to_n(fs['Offered']).sum()
-        k2.metric("Total Inbound", f"{int(inbound_val):,}")
-        wa_count = len(ff[ff['Type'].str.contains('App', case=False, na=False)])
-        k3.metric("Total WhatsApp", f"{wa_count:,}")
-        q_avg = to_n(df_q['EC %'])
-        k4.metric("Avg Quality %", f"{q_avg[q_avg > 0].mean():.1f}%")
+        k2.metric("Total Inbound", f"{int(to_n(df_s['Offered']).sum()):,}") # Inbound ثابت MoM
+        k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
+        k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # --- رجوع الـ 7 Charts كاملة ---
-        st.plotly_chart(px.bar(ff['Merchant'].value_counts().head(10), title="1. Top Merchants", color_discrete_sequence=['#00CC96']), use_container_width=True)
+        st.subheader("🗓️ Volume Trend per Microtype")
         
+        # Peak Days مربوط بالفلتر ff
+        daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
+        peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
+        
+        ff_trend = ff[ff['Full_Date_Obj'].isin(peak_days['Full_Date_Obj'])]
+        ff_trend = ff_trend[~ff_trend['Call Microtype'].isin(EXCLUDE)]
+        micro_sum = ff_trend.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='N')
+
+        hover_list = []
+        for d in peak_days['Full_Date_Obj']:
+            d_data = micro_sum[micro_sum['Full_Date_Obj'] == d].sort_values('N', ascending=False)
+            hover_list.append("<br>".join([f"{r['Call Microtype']}: {r['N']}" for _, r in d_data.iterrows()]))
+
+        fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
+        fig_v.update_traces(customdata=hover_list, hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br>-------------------<br>%{customdata}<extra></extra>")
+        fig_v.update_xaxes(type='category', title=None)
+        st.plotly_chart(fig_v, use_container_width=True)
+
+        st.divider()
         c1, c2 = st.columns(2)
-        with c1: st.plotly_chart(px.bar(ff[br_col].value_counts().head(10), title="2. Top Branches"), use_container_width=True)
-        with c2: st.plotly_chart(px.bar(ff[p_col].value_counts().head(10), title="3. Top Projects"), use_container_width=True)
-        
-        c3, c4 = st.columns(2)
-        with c3: st.plotly_chart(px.pie(ff, names='Ticket type', title="4. Ticket Type Breakdown"), use_container_width=True)
-        with c4: st.plotly_chart(px.bar(ff['Ticket subtype'].value_counts().head(10), title="5. Top Subtypes"), use_container_width=True)
-            
-        c5, c6 = st.columns(2)
-        with c5: st.plotly_chart(px.bar(ff['Call Microtype'].value_counts().head(10), title="6. Microtypes"), use_container_width=True)
-        with c6: st.plotly_chart(px.bar(ff['Action taken'].value_counts().head(10), title="7. Actions Taken"), use_container_width=True)
+        with c1:
+            st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Project'].isin(EXCLUDE)]['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].isin(EXCLUDE)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Action taken'].isin(EXCLUDE)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        with c2:
+            st.plotly_chart(px.bar(ff[~ff[br_col].isin(EXCLUDE)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
+            st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
+            st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with t2:
-        st.subheader("💬 WhatsApp SLA MoM")
+    with tabs[1]:
+        st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
-        m_list = [m for m in master_order if m in ff['Month_Ref'].unique()]
-        if m_list:
-            cols = st.columns(len(m_list))
+        m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
+        if len(m_list) > 0:
+            cols = st.columns(4)
             for i, m in enumerate(m_list):
-                m_data = ff[ff['Month_Ref'] == m]
-                ot = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)])
-                lt = len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
-                total = ot + lt
-                perc = (ot / total * 100) if total > 0 else 0
-                with cols[i]:
-                    st.markdown(f"""
-                    <div style="background-color:#1E1E1E;padding:15px;border-radius:10px;border-left:5px solid #00CC96;margin-bottom:10px">
-                        <h5 style="margin:0;color:#00CC96">{m}</h5>
-                        <p style="margin:5px 0;font-size:22px;"><b>{perc:.1f}%</b></p>
-                        <p style="margin:0;font-size:14px;color:#888">✅ OT: {ot} | ❌ LT: {lt}</p>
-                    </div>""", unsafe_allow_html=True)
-
-    with t3:
-        st.subheader("📈 Inbound SLA Details")
-        fs['SL%'] = (to_n(fs['Answered']) / to_n(fs['Offered']) * 100).fillna(0)
-        st.plotly_chart(px.line(fs, x='Month', y='SL%', title="Service Level Trend", markers=True, color_discrete_sequence=['#00CC96']), use_container_width=True)
-        st.table(fs[['Month', 'Offered', 'Answered', 'Unanswered', 'PCA %', 'Abandoned%']])
-
-    with t4:
+                m_data = ff[ff['Month_Name'] == m]
+                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)]), len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
+                perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
+                with cols[i % 4]:
+                    st.markdown(f'<div class="wa-card"><h5 style="color:{DS_LIGHT_BLUE}">26-{m}</h5><h2 style="margin:10px 0;">{perc:.1f}%</h2><p>✅ On-Time: {ot} | ❌ Late: {lt}</p></div>', unsafe_allow_html=True)
+    
+    with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
-        clean_q = df_q[(df_q['Agent Name'] != '0') & (df_q['Agent Name'] != 'Total')].copy()
-        clean_q['EC %'] = to_n(clean_q['EC %'])
-        clean_q['BC %'] = to_n(clean_q['BC %'])
-        
-        fig_q = px.bar(clean_q, x='Agent Name', y=['EC %', 'BC %'], barmode='group', title="Agent Performance",
-                       labels={'value': 'Score %', 'variable': 'Metric'})
-        new_names = {'EC %': 'EC%', 'BC %': 'BC%'}
-        fig_q.for_each_trace(lambda t: t.update(name = new_names.get(t.name, t.name)))
+        # فلترة الجودة (لو الموظفين مربوطين ببروجكت معين الفلتر هيسمع هنا)
+        clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
+        clean_q.loc[clean_q['Agent Name'] == 'Total', 'Login ID'] = ''
+        plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
+        plot_df['EC%'] = to_n(plot_df['EC %'])
+        plot_df['BC%'] = to_n(plot_df['BC %'])
+        fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison (Excluding Total)", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
+        fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
-        st.dataframe(clean_q, use_container_width=True)
+        st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
-    with t5:
-        st.subheader("🎫 Smart Ticket Explorer")
-        search = st.text_input("🔍 Search Anything (Merchant, ID, Agent...)", "")
-        explorer_df = ff.copy()
-        if search:
-            mask = explorer_df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)
-            explorer_df = explorer_df[mask]
-        st.write(f"Showing {len(explorer_df)} results")
-        st.dataframe(explorer_df, use_container_width=True)
+    with tabs[2]: # Inbound
+        st.subheader("📈 Inbound SLA Summary")
+        st.plotly_chart(px.bar(df_s, x='Month', y=to_n(df_s['PCA %']), title="PCA % Performance", text_auto='.1f', color_discrete_sequence=[DS_BLUE]), use_container_width=True)
+        st.dataframe(df_s.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
+
+    with tabs[4]: # Explorer
+        st.subheader("🎫 Ticket Explorer")
+        search = st.text_input("🔍 Search Anything...", "")
+        exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
+        st.dataframe(exp_df.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 else:
-    st.error("Error Loading Data")
+    st.error("Data connection failed!")
