@@ -3,8 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 import base64
-import requests
-from io import BytesIO
+import os
 
 # 1. إعداد الصفحة والـ Theme
 st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
@@ -12,28 +11,26 @@ st.set_page_config(page_title="DSQUARES INSIGHTS HUB", layout="wide")
 DS_BLUE = "#0055A4"
 DS_LIGHT_BLUE = "#00AEEF"
 
-# دالة سحب اللوجو برابط مباشر من GitHub عشان يظهر فوراً
-@st.cache_data
-def get_remote_image_base64(file_name):
-    url = f"https://raw.githubusercontent.com/mohamedshawky-svg/gdp-dashboard/main/{file_name}"
+def get_image_base64(path):
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            return base64.b64encode(response.content).decode()
+        if os.path.exists(path):
+            with open(path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode()
         return None
     except:
         return None
 
-# سحب الصور من GitHub (تأكد إن الأسامي دي صحيحة عندك)
-full_logo_64 = get_remote_image_base64("logo_icon.png")
-icon_inner_64 = get_remote_image_base64("Small_Logo.png")
+# الأسماء اللي رفعتها على GitHub
+OUTER_LOGO = "logo_icon.png"  
+INNER_LOGO = "Small_Logo.png" 
+
+full_logo_64 = get_image_base64(OUTER_LOGO)
+icon_inner_64 = get_image_base64(INNER_LOGO)
 
 # CSS المطور (تنسيق الهيدر واللوجو)
 st.markdown(f"""
     <style>
-    span[data-baseweb="tag"] {{
-        background-color: {DS_BLUE} !important;
-    }}
+    span[data-baseweb="tag"] {{ background-color: {DS_BLUE} !important; }}
     .main-title {{ 
         color: {DS_BLUE}; font-weight: 900; font-size: 38px !important; 
         text-align: center; margin: 0; font-family: 'Arial Black', sans-serif;
@@ -46,8 +43,7 @@ st.markdown(f"""
     .stMetric, .wa-card {{
         background-color: white !important; padding: 20px !important; border-radius: 12px !important;
         border: 1px solid #e0e0e0 !important; border-top: 6px solid {DS_BLUE} !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; text-align: center;
     }}
     .stDataFrame, div[data-testid="stTable"] {{
         background-color: white !important; color: {DS_BLUE} !important; border-radius: 10px;
@@ -81,9 +77,9 @@ def to_n(series):
     return pd.to_numeric(series.astype(str).str.replace('%','').str.replace(',',''), errors='coerce').fillna(0)
 
 df_f, df_s, df_q = load_all_data()
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Out Of Scope', 'Out of scope', 'Other', 'other', 'na', 'n.a', 'n', 'N', ' ', '']
+EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Other', 'na', 'n', 'N', ' ', '']
 
-# --- 🔐 شاشة الدخول ---
+# --- شاشة الدخول ---
 st.sidebar.title("🔐 Access Control")
 password = st.sidebar.text_input("Enter Password", type="password")
 
@@ -93,15 +89,12 @@ if not password or (password not in ["admin123", "ds2024"]):
     with c2:
         if full_logo_64:
             st.markdown(f'<div style="text-align:center; margin-top:50px;"><img src="data:image/png;base64,{full_logo_64}" style="width:100%; max-width:400px;"/></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f"<h1 style='text-align:center; color:{DS_BLUE}; margin-top:50px;'>DSQUARES</h1>", unsafe_allow_html=True)
     st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
-    if password: st.sidebar.error("Wrong Password!")
     st.stop()
 
 # --- محتوى الداشبورد ---
 if df_f is not None:
-    # ✅ اللوجو الصغير جنب الاسم جوه الداشبورد
+    # اللوجو والاسم الداخلي
     if icon_inner_64:
         st.markdown(f"""
             <div class="header-container">
@@ -136,13 +129,9 @@ if df_f is not None:
     with tabs[0]:
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
-        
-        # ✅ قراءة الـ Total Inbound من عمود P
-        inb_val = 0
-        if 'Total Inbound' in ff.columns:
-            inb_val = int(to_n(ff['Total Inbound']).max())
+        # قراءة الـ Total Inbound من عمود P
+        inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
         k2.metric("Total Inbound", f"{inb_val:,}")
-        
         k3.metric("Total WhatsApp", f"{len(ff[ff['Type'].str.contains('App', case=False, na=False)]):,}")
         k4.metric("Avg Quality", "96.6%")
         
@@ -151,7 +140,6 @@ if df_f is not None:
         daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         fig_v = px.bar(peak_days, x=peak_days['Full_Date_Obj'].astype(str), y='Total', text_auto=True, color_discrete_sequence=[DS_BLUE])
-        fig_v.update_xaxes(type='category', title=None)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
@@ -166,18 +154,30 @@ if df_f is not None:
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
+    with tabs[1]:
+        st.subheader("💬 WhatsApp MoM SLA Analysis")
+        wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
+        m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
+        if len(m_list) > 0:
+            cols = st.columns(4)
+            for i, m in enumerate(m_list):
+                m_data = ff[ff['Month_Name'] == m]
+                ot, lt = len(m_data[m_data[wa_col].str.contains('On-Time', case=False, na=False)]), len(m_data[m_data[wa_col].str.contains('Late', case=False, na=False)])
+                perc = (ot / (ot + lt) * 100) if (ot + lt) > 0 else 0
+                with cols[i % 4]:
+                    st.markdown(f'<div class="wa-card"><h5>{m}</h5><h2>{perc:.1f}%</h2><p>✅ {ot} | ❌ {lt}</p></div>', unsafe_allow_html=True)
+    
     with tabs[3]: # Quality Board
         st.subheader("🏆 Quality Board")
-        clean_q = df_q[to_n(df_q['Total Calls']) > 0].copy()
-        plot_df = clean_q[clean_q['Agent Name'] != 'Total'].copy()
+        clean_q = df_q[df_q['Agent Name'] != 'Total'].copy()
+        plot_df = clean_q.copy()
         plot_df['EC%'] = to_n(plot_df['EC %'])
         plot_df['BC%'] = to_n(plot_df['BC %'])
-        
-        # ✅ العنوان المعدل: Agent Comparison
+        # العنوان المعدل
         fig_q = px.bar(plot_df, x='Agent Name', y=['EC%', 'BC%'], barmode='group', title="Agent Comparison", text_auto='.1f', color_discrete_sequence=[DS_BLUE, DS_LIGHT_BLUE], labels={'value': 'Percentage %', 'variable': 'Metric'})
         fig_q.update_layout(legend_title_text='Results')
         st.plotly_chart(fig_q, use_container_width=True)
-        st.dataframe(clean_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
+        st.dataframe(df_q.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[2]: # Inbound
         st.subheader("📈 Inbound SLA Summary")
@@ -188,5 +188,3 @@ if df_f is not None:
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
         st.dataframe(exp_df.style.set_properties(**{'background-color': 'white', 'color': DS_BLUE}), use_container_width=True, hide_index=True)
-else:
-    st.error("Data connection failed!")
