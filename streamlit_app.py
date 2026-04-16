@@ -19,11 +19,10 @@ def get_image_base64(path):
         return None
     except: return None
 
-# اللوجوهات المعتمدة في الـ Codespace عندك
 full_logo_64 = get_image_base64("logo_big.png")
 icon_inner_64 = get_image_base64("logo_small.png")
 
-# ✅ CSS - التنسيق النهائي (البرواز الكحلي، الظلال، واللون الكحلي للجداول)
+# ✅ CSS - التنسيق النهائي للبطاقات والظلال والجداول
 st.markdown(f"""
     <style>
     [data-testid="stMetric"] {{
@@ -49,9 +48,7 @@ st.markdown(f"""
 
     .main-title {{ color: {DS_BLUE} !important; font-weight: 900; font-size: 38px !important; text-align: center; margin: 0; }}
     .header-container {{ display: flex; align-items: center; justify-content: center; margin-top: 10px; margin-bottom: 30px; gap: 12px; }}
-    [data-testid="stMetricValue"] {{ font-size: 28px !important; color: {DS_BLUE} !important; font-weight: bold; }}
     
-    /* إجبار الجداول على اللون الكحلي */
     [data-testid="stTable"] td, [data-testid="stTable"] th, .stDataFrame div, .stDataFrame span, p, label {{ 
         color: {DS_BLUE} !important; 
     }}
@@ -103,21 +100,17 @@ def to_n(series):
 
 df_f, df_s, df_q = load_all_data()
 
-# ✅ التطهير (Exclude) - تم التأكد من عدم مسح الداتا الأساسية
-EXCLUDE = ['N/A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Out of our scope', 'Other', '0', 'na', 'n/a', 'n', 'N']
+# ✅ التطهير النهائي (شامل n.a وكل المشتقات)
+EXCLUDE = ['N/A', 'n.a', 'n.a ', 'N.A', 'Dropped Call', 'Call Dropped', 'Dropped call', 'Out Of Our Scope', 'Other', '0', 'na', ' ', 'n', 'N']
 
 if df_f is not None:
-    # الهيدر الداخلي باللوجو الصغير
     if icon_inner_64:
         st.markdown(f'<div class="header-container"><img src="data:image/png;base64,{icon_inner_64}" width="40"/><span class="main-title">DSQUARES INSIGHTS HUB</span></div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<p class="main-title">DSQUARES INSIGHTS HUB</p>', unsafe_allow_html=True)
 
-    # 4. الفلاتر الجانبية (الـ 5 كاملة)
+    # 4. الفلاتر
     st.sidebar.divider()
     min_d, max_d = min(df_f['Full_Date_Obj']), max(df_f['Full_Date_Obj'])
     dr = st.sidebar.date_input("🗓 Select Date Range", [min_d, max_d])
-    
     ff = df_f.copy()
     if isinstance(dr, (list, tuple)) and len(dr) == 2:
         ff = ff[(ff['Full_Date_Obj'] >= dr[0]) & (ff['Full_Date_Obj'] <= dr[1])]
@@ -126,19 +119,14 @@ if df_f is not None:
     f_merch = st.sidebar.multiselect("🏪 Merchant", sorted(ff['Merchant'].unique()))
     f_branch = st.sidebar.multiselect("📍 Branch", sorted(ff[br_col].unique()))
     f_proj = st.sidebar.multiselect("🏢 Project", sorted(ff['Project'].unique()))
-    f_type = st.sidebar.multiselect("🎫 Ticket type", sorted(ff['Ticket type'].unique()))
-    f_action = st.sidebar.multiselect("🎬 Action Taken", sorted(ff['Action taken'].unique()))
     
     if f_merch: ff = ff[ff['Merchant'].isin(f_merch)]
     if f_branch: ff = ff[ff[br_col].isin(f_branch)]
     if f_proj: ff = ff[ff['Project'].isin(f_proj)]
-    if f_type: ff = ff[ff['Ticket type'].isin(f_type)]
-    if f_action: ff = ff[ff['Action taken'].isin(f_action)]
 
-    # 5. التابات
     tabs = st.tabs(["🏠 Overview", "💬 WhatsApp MoM", "📈 Inbound SLA", "🏆 Quality Board", "🎫 Ticket Explorer"])
 
-    with tabs[0]: # 🏠 Overview (Metrics + 7 Charts)
+    with tabs[0]: # 🏠 Overview
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total Tickets", f"{len(ff):,}")
         inb_val = int(to_n(ff['Total Inbound']).max()) if 'Total Inbound' in ff.columns else 0
@@ -147,12 +135,27 @@ if df_f is not None:
         k4.metric("Avg Quality", "96.6%")
         
         st.divider()
-        # Volume Trend
-        daily_vol = ff.groupby('Full_Date_Obj').size().reset_index(name='Total')
+        # ✅ تطوير Volume Trend لإظهار الـ Microtypes في الـ Hover
+        daily_sum = ff.groupby(['Full_Date_Obj', 'Call Microtype']).size().reset_index(name='Count')
+        daily_sum = daily_sum[~daily_sum['Call Microtype'].isin(EXCLUDE)]
+        daily_sum = daily_sum.sort_values(['Full_Date_Obj', 'Count'], ascending=[True, False])
+        
+        daily_vol = daily_sum.groupby('Full_Date_Obj')['Count'].sum().reset_index(name='Total')
         peak_days = daily_vol.nlargest(20, 'Total').sort_values('Full_Date_Obj')
         peak_days['Date_Str'] = peak_days['Full_Date_Obj'].astype(str)
+        
+        # تحضير الـ Hover Data (أهم 5 أنواع لكل يوم)
+        hover_dict = {}
+        for d in peak_days['Full_Date_Obj']:
+            day_data = daily_sum[daily_sum['Full_Date_Obj'] == d].head(5)
+            hover_text = "<br>".join([f"• {row['Call Microtype']}: {row['Count']}" for _, row in day_data.iterrows()])
+            hover_dict[str(d)] = hover_text
+            
         fig_v = px.bar(peak_days, x='Date_Str', y='Total', text_auto=True, title="🗓 Volume Trend (Peak Days)", color_discrete_sequence=[DS_BLUE])
-        fig_v.update_xaxes(type='category', title=None)
+        fig_v.update_traces(customdata=[hover_dict.get(d, "No Data") for d in peak_days['Date_Str']],
+                           hovertemplate="<b>Date: %{x}</b><br>Total: %{y}<br><br><b>Top Microtypes:</b><br>%{customdata}<extra></extra>")
+        
+        fig_v.update_xaxes(type='category', title=None, tickangle=45)
         st.plotly_chart(fig_v, use_container_width=True)
 
         st.divider()
@@ -160,14 +163,11 @@ if df_f is not None:
         with c1:
             st.plotly_chart(px.bar(ff[~ff['Merchant'].isin(EXCLUDE)]['Merchant'].value_counts().head(10), title="1. Top Merchants", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
             st.plotly_chart(px.bar(ff[~ff['Project'].isin(EXCLUDE)]['Project'].value_counts().head(10), title="3. Top Projects", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Ticket subtype'].isin(EXCLUDE)]['Ticket subtype'].value_counts().head(10), title="5. Top Sub-types", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Action taken'].isin(EXCLUDE)]['Action taken'].value_counts().head(10), title="7. Top Actions Taken", text_auto=True, color_discrete_sequence=[DS_BLUE]), use_container_width=True)
         with c2:
             st.plotly_chart(px.bar(ff[~ff[br_col].isin(EXCLUDE)][br_col].value_counts().head(10), title="2. Top Branches", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
             st.plotly_chart(px.pie(ff[~ff['Ticket type'].isin(EXCLUDE)], names='Ticket type', title="4. Ticket Type Distribution"), use_container_width=True)
-            st.plotly_chart(px.bar(ff[~ff['Call Microtype'].isin(EXCLUDE)]['Call Microtype'].value_counts().head(10), title="6. Top Microtypes", text_auto=True, color_discrete_sequence=[DS_LIGHT_BLUE]), use_container_width=True)
 
-    with tabs[1]: # 💬 WhatsApp MoM (On-Time / Late)
+    with tabs[1]: # 💬 WhatsApp MoM
         st.subheader("💬 WhatsApp MoM SLA Analysis")
         wa_col = next((c for c in ff.columns if 'sla status' in c.lower()), "WhatsApp SLA Status")
         m_list = ff.sort_values('Month_Num')['Month_Name'].unique()
@@ -197,7 +197,6 @@ if df_f is not None:
         st.dataframe(clean_q.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
 
     with tabs[4]: # 🎫 Ticket Explorer
-        st.subheader("🎫 Ticket Explorer")
         search = st.text_input("🔍 Search Anything...", "")
         exp_df = ff[ff.apply(lambda r: r.astype(str).str.contains(search, case=False).any(), axis=1)] if search else ff
         st.dataframe(exp_df.style.set_properties(**{'color': DS_BLUE}), use_container_width=True, hide_index=True)
